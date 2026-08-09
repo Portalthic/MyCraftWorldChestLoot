@@ -68,7 +68,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PoolEditorListener(this), this);
         getServer().getScheduler().runTaskTimerAsynchronously(this, this::saveCooldowns, 1200L, 1200L);
         getServer().getScheduler().runTaskTimer(this, this::forgetExpiredInventories, 20L, 20L);
-        getLogger().info("MyCraftWorldChestLoot 1.0.0 enabled with " + pools.size() + " pool(s).");
+        getLogger().info("MyCraftWorldChestLoot " + getDescription().getVersion() + " enabled with " + pools.size() + " pool(s).");
     }
 
     @Override
@@ -143,8 +143,8 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
 
         int size = chestInventorySize(block);
         String displayName = link.title == null ? poolName.replace('_', ' ') : link.title;
-        String title = color(getConfig().getString("ChestName",
-                getConfig().getString("settings.gui-title", "&6<name>"))).replace("<name>", displayName);
+        String title = color(getConfig().getString("settings.ChestName",
+                getConfig().getString("settings.default-gui-title", "&6<name>"))).replace("<name>", displayName);
         if (title.length() > 32) title = title.substring(0, 32);
         Inventory inventory;
         if (cached != null) {
@@ -160,7 +160,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             inventoryCache.put(cacheKey, cached);
         }
         if (remaining > 0) send(player, "cooldown-remaining", "<time>", formatDuration(remaining));
-        cached.expiresAt = now + Math.max(0, getConfig().getLong("ForgetInventoryTime", 60)) * 1000L;
+        cached.expiresAt = now + Math.max(0, getConfig().getLong("settings.ForgetInventoryTime", 60)) * 1000L;
         openVirtualChest(player, block, inventory);
     }
 
@@ -169,7 +169,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         for (ItemStack item : items) {
             if (!inventory.addItem(item).isEmpty()) overflow = true;
         }
-        if (getConfig().getBoolean("ShuffleLoot", false)) {
+        if (getConfig().getBoolean("settings.ShuffleLoot", false)) {
             List<ItemStack> contents = new ArrayList<>(Arrays.asList(inventory.getContents()));
             Collections.shuffle(contents, random);
             inventory.setContents(contents.toArray(new ItemStack[contents.size()]));
@@ -235,7 +235,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
 
     private int chestInventorySize(Block block) {
         if (block.getState() instanceof Chest) return ((Chest) block.getState()).getInventory().getSize();
-        int configured = getConfig().getInt("settings.gui-size", 27);
+        int configured = getConfig().getInt("settings.default-gui-size", 27);
         return Math.max(9, Math.min(54, ((configured + 8) / 9) * 9));
     }
 
@@ -460,6 +460,10 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             send(sender, "no-permission");
             return true;
         }
+        if (args.length == 0) {
+            send(sender, "help");
+            return true;
+        }
         if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
             reloadConfig();
             messages.reload();
@@ -469,6 +473,23 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         }
         if (args.length > 0 && args[0].equalsIgnoreCase("list")) {
             send(sender, "pool-list", "<pools>", String.join(", ", pools.keySet()));
+            return true;
+        }
+        if (args[0].equalsIgnoreCase("show")) {
+            if (args.length < 3) {
+                send(sender, "show-usage");
+                return true;
+            }
+            Player target = findOnlinePlayer(args[2]);
+            if (target == null) {
+                send(sender, "player-not-found");
+                return true;
+            }
+            if (!openPoolPreview(target, args[1])) {
+                send(sender, "pool-not-found");
+                return true;
+            }
+            send(sender, "show-success", "<player>", target.getName(), "<pool>", args[1]);
             return true;
         }
         if (args.length >= 1 && args[0].equalsIgnoreCase("reset")) {
@@ -482,30 +503,45 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             send(sender, "clean-success", "<count>", String.valueOf(removed));
             return true;
         }
-        if (!(sender instanceof Player)) { send(sender, "player-only"); return true; }
-        Player player = (Player) sender;
         if (args.length >= 2 && args[0].equalsIgnoreCase("make")) {
+            if (!(sender instanceof Player)) { send(sender, "player-only"); return true; }
+            Player player = (Player) sender;
             createPool(player, args[1]);
             return true;
         }
         if (args.length >= 2 && args[0].equalsIgnoreCase("info")) {
+            if (!(sender instanceof Player)) { send(sender, "player-only"); return true; }
+            Player player = (Player) sender;
             openPoolEditor(player, args[1]);
             return true;
         }
         if (args.length >= 2 && args[0].equalsIgnoreCase("link")) {
+            if (!(sender instanceof Player)) { send(sender, "player-only"); return true; }
+            Player player = (Player) sender;
             linkRegionBlock(player, args[1]);
             return true;
         }
         if (args.length >= 1 && args[0].equalsIgnoreCase("unlink")) {
+            if (!(sender instanceof Player)) { send(sender, "player-only"); return true; }
+            Player player = (Player) sender;
             unlinkRegionBlock(player);
             return true;
         }
-        send(player, "help");
+        send(sender, "help");
         return true;
     }
 
+    private Player findOnlinePlayer(String input) {
+        try {
+            Player byUuid = getServer().getPlayer(UUID.fromString(input));
+            if (byUuid != null) return byUuid;
+        } catch (IllegalArgumentException ignored) { }
+        Player exact = getServer().getPlayerExact(input);
+        return exact != null ? exact : getServer().getPlayer(input);
+    }
+
     private void resetNamed(CommandSender sender, String name) {
-        if (name.equalsIgnoreCase("all")) {
+        if (name.equals("*")) {
             int count = cooldowns.size();
             cooldowns.clear();
             saveCooldowns();
@@ -570,6 +606,25 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         PoolEditorListener.refresh(this, holder);
         player.openInventory(inventory);
         send(player, "editor-opened");
+    }
+
+    private boolean openPoolPreview(Player player, String name) {
+        Pool pool = pools.get(name);
+        if (pool == null) return false;
+        PoolPreviewHolder holder = new PoolPreviewHolder();
+        String title = message("preview-title", "<pool>", name);
+        if (title.length() > 32) title = title.substring(0, 32);
+        Inventory inventory = getServer().createInventory(holder, 54, title);
+        holder.setInventory(inventory);
+        for (Reward reward : pool.getRewards()) {
+            ItemStack item = reward.build(player);
+            if (item != null && item.getType() != Material.AIR && holder.getEntries().size() < 45) {
+                holder.getEntries().add(new PoolEditorEntry(item, reward.getChance()));
+            }
+        }
+        PoolEditorListener.refreshPreview(this, holder);
+        player.openInventory(inventory);
+        return true;
     }
 
     void saveEditedPool(String name, List<PoolEditorEntry> entries, int cooldownSeconds, boolean globalReset) {

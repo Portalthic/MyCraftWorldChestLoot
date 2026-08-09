@@ -30,6 +30,13 @@ final class PoolEditorListener implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent event) {
         Inventory top = event.getView().getTopInventory();
+        if (top.getHolder() instanceof PoolPreviewHolder) {
+            event.setCancelled(true);
+            if (event.getRawSlot() == SAVE_SLOT && event.getWhoClicked() instanceof Player) {
+                ((Player) event.getWhoClicked()).closeInventory();
+            }
+            return;
+        }
         if (!(top.getHolder() instanceof PoolEditorHolder)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player)) return;
@@ -86,7 +93,8 @@ final class PoolEditorListener implements Listener {
 
     @EventHandler
     public void onDrag(InventoryDragEvent event) {
-        if (event.getView().getTopInventory().getHolder() instanceof PoolEditorHolder) event.setCancelled(true);
+        Object holder = event.getView().getTopInventory().getHolder();
+        if (holder instanceof PoolEditorHolder || holder instanceof PoolPreviewHolder) event.setCancelled(true);
     }
 
     @EventHandler
@@ -128,6 +136,26 @@ final class PoolEditorListener implements Listener {
                 plugin.message("tool-reset-shift"), plugin.message("tool-reset-toggle")));
         inventory.setItem(SAVE_SLOT, tool(plugin, Material.EMERALD, plugin.message("tool-save-name"), false,
                 plugin.message("tool-save-description")));
+    }
+
+    static void refreshPreview(MyCraftWorldChestLoot plugin, PoolPreviewHolder holder) {
+        Inventory inventory = holder.getInventory();
+        if (inventory == null) return;
+        for (int slot = 0; slot < REWARD_SLOTS; slot++) inventory.clear(slot);
+        for (int slot = 0; slot < holder.getEntries().size() && slot < REWARD_SLOTS; slot++) {
+            PoolEditorEntry entry = holder.getEntries().get(slot);
+            ItemStack display = entry.getItem();
+            ItemMeta meta = display.getItemMeta();
+            List<String> lore = meta != null && meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
+            lore.add(plugin.message("editor-divider"));
+            lore.add(plugin.message("editor-chance", "<chance>", String.valueOf(entry.getChance())));
+            lore.add(plugin.message("editor-amount", "<amount>", String.valueOf(entry.getAmount())));
+            lore.add(plugin.message("preview-read-only"));
+            if (meta != null) { meta.setLore(lore); display.setItemMeta(meta); }
+            inventory.setItem(slot, display);
+        }
+        inventory.setItem(SAVE_SLOT, tool(plugin, Material.BARRIER, plugin.message("preview-close-name"), false,
+                plugin.message("preview-close-description")));
     }
 
     private static String formatTime(MyCraftWorldChestLoot plugin, int seconds) {

@@ -1,6 +1,6 @@
 name: MyCraftWorldChestLoot
 main: com.mycraft.worldchestloot.MyCraftWorldChestLoot
-version: 1.0.0
+version: 1.0.1
 author: MyCraft
 description: WorldGuard-aware random chest loot for Paper 1.12.2
 depend: []
@@ -9,7 +9,7 @@ commands:
   mcwcl:
     description: Manage MyCraftWorldChestLoot
     aliases: [wcl]
-    usage: /mcwcl <reload|make|info|link|unlink|reset|clean|list>
+    usage: /mcwcl <reload|make|info|show|link|unlink|reset|clean|list>
 permissions:
   mcwcl.admin:
     default: op

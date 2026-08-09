@@ -1,56 +1,68 @@
 # MyCraftWorldChestLoot
 
-Paper 1.12.2 random chest loot plugin with WorldGuard 6.2.2 region selection and optional Zaphkiel item IDs.
+适用于 Paper 1.12.2 的大世界随机宝箱插件。
+插件版本为 `1.0.1`。
 
-## Pool files
+## 依赖
 
-Loot pools are loaded from `plugins/MyCraftWorldChestLoot/LootTables/*.yml`. The primary format is the PhatLoots serialized format, so an existing `LootTables/<name>.yml` can be copied into this directory without conversion. The loader supports `PhatLoot`, nested `LootCollection`, and `Item` entries, including `Probability`, `LowerNumberOfLoots`, `UpperNumberOfLoots`, `Global`, and `Reset`.
+#### 硬依赖
 
-Only the PhatLoots-compatible files in `LootTables` are loaded. The former `pools` directory, compact reward format, and `config.yml` `pools` section are not supported.
+- WorldGuard 6.2.2
+- WorldEdit（与 WorldGuard 6.2.2 配套版本）
 
-The original PhatLoots sample contains `Money` and `Experience` nodes. They are intentionally ignored by this chest-only plugin; item and nested collection entries are loaded.
+#### 软依赖
 
-`LootTables/SampleLoot.yml` is the upstream reference sample. `LootTables/SampleLootZaphkiel.yml` demonstrates the additional item-library entry:
+- Zaphkiel（用于通过物品 ID 动态构建自定义物品）
 
-```yaml
-- ==: ZaphkielItem
-  ItemID: example_sword
-  Amount: 1
-  Probability: 70.0
+## 构建
+
+项目使用 Java 8 字节码。Windows 环境可以执行：
+
+```powershell
+.\gradlew.bat clean build
 ```
 
-`ZaphkielItem` is the only intentional format extension; it stores the Zaphkiel ID instead of a copied `ItemStack`.
+成品位于 `build/libs/MyCraftWorldChestLoot-1.0.1.jar`。
 
-## Commands
+## 配置
 
-`/wcl` is an alias of `/mcwcl`.
+首次启动生成：
 
-- `/mcwcl reload`
-- `/mcwcl make <name>`
-- `/mcwcl info <name>`
-- `/mcwcl link <name>`
-- `/mcwcl unlink`
-- `/mcwcl reset`
-- `/mcwcl reset <pool>`
-- `/mcwcl reset all`
-- `/mcwcl clean`
-- `/mcwcl list`
+```text
+plugins/MyCraftWorldChestLoot/
+├─ config.yml
+├─ message.yml
+├─ cooldowns.yml
+└─ LootTables/
+   ├─ SampleLoot.yml
+   └─ SampleLootZaphkiel.yml
+```
 
-`link <name>` follows the original PhatLoots workflow: look at a configured chest and execute the command. The plugin automatically records world, current highest-priority WorldGuard region, and chest material. No coordinates or region arguments are needed.
+奖池仅从 `LootTables/*.yml` 加载，文件使用 PhatLoots 的 `PhatLoot`、`LootCollection` 和 `Item` 序列化结构。`SampleLootZaphkiel.yml` 额外展示本插件的 `ZaphkielItem` 格式。
 
-`info <name>` opens the administrator editor GUI. Click items in the player inventory to add rewards, select the Probability, Amount, or Reset tool, then click reward entries to adjust them. Left-click in Manage mode removes a reward. Close the inventory to save.
+`settings.ShuffleLoot` 控制奖励是否随机散布。`settings.ForgetInventoryTime` 控制虚拟箱子内容在 JVM 内存中的保留秒数。缓存过期但冷却尚未结束时，玩家会看到同尺寸的空箱子。
 
-`reset` follows the original PhatLoots command behavior: with no argument, it resets the chest you are looking at; with a pool name, it clears all existing cooldown records for that pool; `reset all` clears every cooldown record. These commands do not change a pool's configured cooldown duration. `clean` removes records whose cooldown has already expired.
+普通箱子和单个陷阱箱使用 27 格界面；普通大箱子和陷阱大箱子使用 54 格界面。双箱左右两部分共用同一个区域绑定、奖励缓存和冷却记录。
 
-## Selection
+## 区域绑定
 
-When a configured chest is opened, the plugin selects the highest-priority WorldGuard region linked for that world and chest material. If no region link matches, the world's material default and then `settings.default-pool` are used. Each pool controls its own cooldown and `global-reset` mode.
-
-For example:
+区域绑定格式：
 
 ```yaml
 links:
-  survival:
+  <世界名>:
+    regions:
+      <WorldGuard区域名>:
+        <方块类型>: <奖池名>:<可选界面标题>
+    default:
+      <方块类型>: <奖池名>:<可选界面标题>
+```
+
+例如：
+
+```yaml
+links:
+  world:
     regions:
       dungeon:
         CHEST: rare:稀有宝箱
@@ -58,42 +70,47 @@ links:
       CHEST: basic:基础宝箱
 ```
 
-This means a normal chest inside the WorldGuard region `dungeon` in world `survival` uses `rare` and displays `稀有宝箱`; other normal chests use `basic` and display `基础宝箱`. The title after the first colon is optional. Without it, the loot table name is displayed. The original PhatLoots AutoLink form is also accepted:
+区域匹配优先于世界默认绑定。`default` 可以省略；未匹配绑定且 `settings.default-pool` 为空时，插件不会接管该箱子。省略可选标题时，界面使用奖池原名。
 
-The general regional structure is:
+## 管理命令
 
-```yaml
-links:
-  <世界名>:
-    regions:
-      <区域名>:
-        <方块名>: <链接的loot名>
-    default:
-      <方块名>: <链接的loot名>
+`/wcl` 是 `/mcwcl` 的别名。
+
+```text
+/mcwcl make <奖池>
+/mcwcl info <奖池>
+/mcwcl show <奖池> <玩家>
+/mcwcl link <奖池>
+/mcwcl unlink
+/mcwcl reset
+/mcwcl reset <奖池|*>
+/mcwcl clean
+/mcwcl list
+/mcwcl reload
 ```
 
-The direct world-default structure, equivalent to the original AutoLink format, is:
+`make` 创建奖池，`info` 打开管理员编辑界面，`show` 为指定在线玩家打开只读概率预览。`link` 与 `unlink` 会根据管理员准星所指箱子自动识别世界、WorldGuard 区域和方块类型。
 
-```yaml
-links:
-  <世界名>:
-    <方块名>: <链接的loot名>
+不带参数的 `reset` 重置准星所指箱子；`reset <奖池名>` 重置指定奖池；`reset *` 重置全部奖池。重置只清除现有冷却记录，不修改奖池刷新时间。
+
+## 权限管理
+
+所有管理命令使用权限：
+
+```text
+mcwcl.admin
 ```
 
-For example, `survival: CHEST: basic` links normal chests in the `survival` world to the `basic` loot table.
+## 致谢
 
-## Chest behavior
+#### AI辅助
+- ChatGPT-5.6 Sol
+- Codex
 
-The following PhatLoots-style settings are in `config.yml`:
-
-```yaml
-ShuffleLoot: false
-ForgetInventoryTime: 60
-ChestName: "&6<name>"
-```
-
-`ShuffleLoot: true` scatters generated items across the available slots. A normal chest uses 27 slots; a double chest uses 54 slots. Both halves of a double chest are normalized to the same left-side chest for region selection, cooldowns, cached contents, linking, and reset commands.
-
-`ForgetInventoryTime` controls how long a generated virtual inventory remains in memory. During that period, reopening the chest shows the same inventory with any already-taken items missing. Once the cache expires, a chest that is still on cooldown opens as an empty inventory instead of being blocked. The cooldown itself is still stored in `cooldowns.yml`.
-
-Chest opening and closing play the 1.12.2 chest block animation and chest sound. `message.yml` contains all player-facing command, cooldown, editor, and overflow text and can be edited without changing the plugin JAR.
+#### 我的手艺
+- 测试组 bilibiliHMP
+- 测试组 Hermois
+- 测试组 licha
+- 测试组 qingye
+- 测试组 Xtlylg
+- 广大冒险者

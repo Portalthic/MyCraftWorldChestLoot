@@ -1,11 +1,11 @@
 settings:
   # 可被插件接管的箱子方块类型。
   chest-materials:
-    - CHEST
-    - TRAPPED_CHEST
-  # 非标准容器使用的后备界面标题与大小。普通箱子和大箱子会自动使用 27/54 格。
-  gui-title: "&8宝箱"
-  gui-size: 27
+  - CHEST
+  - TRAPPED_CHEST
+  # 非标准容器使用的默认界面标题与大小。普通箱子和大箱子会自动使用 27/54 格。
+  default-gui-title: "&8宝箱"
+  default-gui-size: 27
   # 没有匹配世界或区域绑定时使用的后备奖池。留空表示不接管该箱子。
   default-pool: ""
   # 新建奖池时使用的默认冷却秒数与冷却模式。
@@ -14,16 +14,13 @@ settings:
   default-global-reset: false
   # 预留设置，目前不会用占位物品填满空槽位。
   fill-empty-slots: false
-
-# 设置为 true 时，生成的奖励会随机散布在箱子槽位中；false 时从左上角开始排列。
-ShuffleLoot: false
-
-# 虚拟箱子内容在内存中保留的秒数。
-# 缓存期间再次打开会看到上次剩余的物品；缓存过期但仍在冷却时会打开空箱子。
-ForgetInventoryTime: 60
-
-# 奖励箱界面标题，<name> 会被替换为奖池名称，支持使用 & 颜色代码。
-ChestName: "&8<name>"
+  # 设置为 true 时，奖励随机散布在箱子槽位中；false 时从左上角开始排列。
+  ShuffleLoot: false
+  # 虚拟箱子内容在内存中保留的秒数。
+  # 缓存期间再次打开会看到上次剩余物品；缓存过期但仍在冷却时会打开空箱子。
+  ForgetInventoryTime: 60
+  # 奖励箱界面标题，<name> 会被替换为奖池名或 links 中配置的映射标题。
+  ChestName: "&8<name>"
 
 links: {}
 # 管理员看向箱子执行 /wcl link <奖池名> 时，插件会自动写入区域绑定。
