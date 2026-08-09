@@ -3,6 +3,9 @@ settings:
   chest-materials:
   - CHEST
   - TRAPPED_CHEST
+  # 家具头颅所有者名称的固定前缀。例如 model:plantegg 会生成绑定键 SKULL:plantegg。
+  # 只有在 links 中明确配置了对应绑定键的模型头颅才会被插件接管。
+  skull-model-prefix: "model:"
   # 非标准容器使用的默认界面标题与大小。普通箱子和大箱子会自动使用 27/54 格。
   default-gui-title: "&8宝箱"
   default-gui-size: 27
@@ -16,6 +19,9 @@ settings:
   fill-empty-slots: false
   # 设置为 true 时，奖励随机散布在箱子槽位中；false 时从左上角开始排列。
   ShuffleLoot: false
+  # 设置为 true 时，一个集合在一次抽取多个奖励时可以重复命中同一个奖励条目。
+  # 设置为 false 时，同一个奖励条目在单次集合抽取中最多命中一次。
+  AllowDuplicateItemsFromCollections: true
   # 虚拟箱子内容在内存中保留的秒数。
   # 缓存期间再次打开会看到上次剩余物品；缓存过期但仍在冷却时会打开空箱子。
   ForgetInventoryTime: 60
@@ -23,7 +29,7 @@ settings:
   ChestName: "&8<name>"
 
 links: {}
-# 管理员看向箱子执行 /wcl link <奖池名> 时，插件会自动写入区域绑定。
+# 管理员看向箱子或模型头颅执行 /wcl link <奖池名> 时，插件会自动写入区域绑定。
 # 区域绑定结构如下，其中区域名来自 WorldGuard：
 # links:
 #   <世界名>:
@@ -37,6 +43,7 @@ links: {}
 #     regions:
 #       dungeon:
 #         CHEST: rare:稀有宝箱
+#         SKULL:plantegg: rare:茄子宝箱
 #     default:
 #       CHEST: basic:基础宝箱
 #

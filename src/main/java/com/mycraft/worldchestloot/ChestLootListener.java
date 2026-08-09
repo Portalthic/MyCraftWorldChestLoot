@@ -18,9 +18,9 @@ public final class ChestLootListener implements Listener {
     public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND || event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         Block block = event.getClickedBlock();
-        if (block == null || !plugin.isChest(block.getType())) return;
+        if (block == null) return;
         block = plugin.canonicalChest(block);
-        MyCraftWorldChestLoot.ResolvedLink link = plugin.resolveLink(block.getLocation());
+        MyCraftWorldChestLoot.ResolvedLink link = plugin.resolveLink(block);
         if (link == null) return;
         event.setCancelled(true);
         Player player = event.getPlayer();

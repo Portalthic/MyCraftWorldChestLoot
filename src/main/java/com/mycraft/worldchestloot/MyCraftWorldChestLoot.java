@@ -5,7 +5,9 @@ import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.Chest;
+import org.bukkit.block.Skull;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
@@ -22,6 +24,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -83,26 +87,65 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         return chestMaterials.contains(material);
     }
 
-    ResolvedLink resolveLink(org.bukkit.Location location) {
+    ResolvedLink resolveLink(Block block) {
+        String blockKey = blockLinkKey(block);
+        if (blockKey == null) return null;
+        org.bukkit.Location location = block.getLocation();
         String worldName = location.getWorld().getName();
-        String material = location.getBlock().getType().name();
         ConfigurationSection linksRoot = getConfig().getConfigurationSection("links");
         ConfigurationSection world = linksRoot == null ? null : linksRoot.getConfigurationSection(worldName);
         if (world != null) {
             for (String region : worldGuard.regions(location)) {
                 ConfigurationSection scope = getLinkScope(world, region);
-                ResolvedLink link = scope == null ? null : parseLink(materialString(scope, material));
+                ResolvedLink link = scope == null ? null : parseLink(materialString(scope, blockKey));
                 if (link != null) return link;
             }
             ConfigurationSection defaultScope = getLinkScope(world, null);
-            ResolvedLink worldDefault = defaultScope == null ? null : parseLink(materialString(defaultScope, material));
+            ResolvedLink worldDefault = defaultScope == null ? null : parseLink(materialString(defaultScope, blockKey));
             if (worldDefault != null) return worldDefault;
             // PhatLoots AutoLink compatibility: links.<world>.<material>: <pool>
-            ResolvedLink directDefault = parseLink(materialString(world, material));
+            ResolvedLink directDefault = parseLink(materialString(world, blockKey));
             if (directDefault != null) return directDefault;
         }
+        // The fallback pool retains its original meaning: unlinked configured chest types only.
+        if (!isChest(block.getType())) return null;
         String fallback = getConfig().getString("settings.default-pool", "");
         return parseLink(fallback);
+    }
+
+    String blockLinkKey(Block block) {
+        if (block == null) return null;
+        if (block.getType() == Material.SKULL) {
+            String owner = skullOwnerName(block);
+            String prefix = getConfig().getString("settings.skull-model-prefix", "model:");
+            if (owner == null || prefix == null || prefix.isEmpty() || !owner.startsWith(prefix)) return null;
+            String model = owner.substring(prefix.length()).trim();
+            return model.isEmpty() ? null : "SKULL:" + model;
+        }
+        return isChest(block.getType()) ? block.getType().name() : null;
+    }
+
+    private String skullOwnerName(Block block) {
+        BlockState state = block.getState();
+        if (!(state instanceof Skull)) return null;
+        String owner = ((Skull) state).getOwner();
+        if (owner != null && !owner.isEmpty()) return owner;
+
+        // Some 1.12 furniture plugins populate CraftSkull's GameProfile directly.
+        for (Class<?> type = state.getClass(); type != null; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                if (!field.getType().getName().equals("com.mojang.authlib.GameProfile")) continue;
+                try {
+                    field.setAccessible(true);
+                    Object profile = field.get(state);
+                    if (profile == null) continue;
+                    Method getName = profile.getClass().getMethod("getName");
+                    Object name = getName.invoke(profile);
+                    if (name != null && !String.valueOf(name).isEmpty()) return String.valueOf(name);
+                } catch (ReflectiveOperationException | SecurityException ignored) { }
+            }
+        }
+        return null;
     }
 
     private ResolvedLink parseLink(String configured) {
@@ -152,7 +195,9 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         } else {
             inventory = getServer().createInventory(null, size, title);
             if (remaining <= 0) {
-                addLoot(inventory, pool.roll(player, random), player);
+                boolean allowDuplicates = getConfig().getBoolean(
+                        "settings.AllowDuplicateItemsFromCollections", true);
+                addLoot(inventory, pool.roll(player, random, allowDuplicates), player);
                 long until = pool.cooldownSeconds < 0 ? Long.MAX_VALUE : now + pool.cooldownSeconds * 1000L;
                 cooldowns.put(cooldownKey(poolName, block, player), until);
             }
@@ -166,13 +211,21 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
 
     private void addLoot(Inventory inventory, List<ItemStack> items, Player player) {
         boolean overflow = false;
-        for (ItemStack item : items) {
-            if (!inventory.addItem(item).isEmpty()) overflow = true;
+        List<Integer> emptySlots = new ArrayList<>();
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack existing = inventory.getItem(slot);
+            if (existing == null || existing.getType() == Material.AIR) emptySlots.add(slot);
         }
-        if (getConfig().getBoolean("settings.ShuffleLoot", false)) {
-            List<ItemStack> contents = new ArrayList<>(Arrays.asList(inventory.getContents()));
-            Collections.shuffle(contents, random);
-            inventory.setContents(contents.toArray(new ItemStack[contents.size()]));
+        if (getConfig().getBoolean("settings.ShuffleLoot", false)) Collections.shuffle(emptySlots, random);
+
+        int nextSlot = 0;
+        for (ItemStack item : items) {
+            if (item == null || item.getType() == Material.AIR) continue;
+            if (nextSlot >= emptySlots.size()) {
+                overflow = true;
+                continue;
+            }
+            inventory.setItem(emptySlots.get(nextSlot++), item.clone());
         }
         if (overflow) send(player, "inventory-overflow");
     }
@@ -180,18 +233,21 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     private void openVirtualChest(Player player, Block block, Inventory inventory) {
         String chestKey = chestLocationKey(block);
         if (player.openInventory(inventory) == null) return;
-        openInventories.put(player.getUniqueId(), new OpenInventory(block, chestKey));
+        boolean animateChest = block.getState() instanceof Chest;
+        openInventories.put(player.getUniqueId(), new OpenInventory(block, chestKey, animateChest));
+        player.playSound(block.getLocation(), Sound.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.75F, 0.95F);
+        if (!animateChest) return;
         int viewers = chestViewers.containsKey(chestKey) ? chestViewers.get(chestKey) : 0;
         chestViewers.put(chestKey, viewers + 1);
-        player.playSound(block.getLocation(), Sound.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.75F, 0.95F);
         if (viewers == 0) playChestAnimation(block, true);
     }
 
     void closeVirtualChest(Player player) {
         OpenInventory opened = openInventories.remove(player.getUniqueId());
         if (opened == null) return;
-        int viewers = chestViewers.containsKey(opened.chestKey) ? chestViewers.get(opened.chestKey) - 1 : 0;
         player.playSound(opened.block.getLocation(), Sound.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.75F, 0.95F);
+        if (!opened.animateChest) return;
+        int viewers = chestViewers.containsKey(opened.chestKey) ? chestViewers.get(opened.chestKey) - 1 : 0;
         if (viewers <= 0) {
             chestViewers.remove(opened.chestKey);
             Block closingBlock = opened.block;
@@ -562,7 +618,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
 
     private void resetTarget(Player player) {
         Block block = player.getTargetBlock(null, 10);
-        if (block == null || !isChest(block.getType())) {
+        if (block == null || blockLinkKey(block) == null) {
             send(player, "target-chest-required");
             return;
         }
@@ -698,7 +754,8 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             return;
         }
         Block block = player.getTargetBlock(null, 10);
-        if (block == null || !isChest(block.getType())) {
+        String blockKey = blockLinkKey(block);
+        if (block == null || blockKey == null) {
             send(player, "target-chest-required");
             return;
         }
@@ -706,18 +763,19 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         String region = primaryRegion(block);
         ConfigurationSection world = getOrCreateWorldLinks(block.getWorld().getName());
         ConfigurationSection target = getOrCreateLinkScope(world, region);
-        target.set(block.getType().name(), pool);
+        target.set(blockKey, pool);
         saveConfig();
         loadData();
         String scope = region == null
                 ? message("scope-world", "<world>", block.getWorld().getName())
                 : message("scope-region", "<region>", region);
-        send(player, "link-success", "<block>", block.getType().name(), "<scope>", scope, "<pool>", pool);
+        send(player, "link-success", "<block>", blockKey, "<scope>", scope, "<pool>", pool);
     }
 
     private void unlinkRegionBlock(Player player) {
         Block block = player.getTargetBlock(null, 10);
-        if (block == null || !isChest(block.getType())) {
+        String blockKey = blockLinkKey(block);
+        if (block == null || blockKey == null) {
             send(player, "target-chest-required");
             return;
         }
@@ -726,13 +784,13 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         ConfigurationSection root = getConfig().getConfigurationSection("links");
         ConfigurationSection world = root == null ? null : directSection(root, block.getWorld().getName());
         ConfigurationSection target = world == null ? null : getLinkScope(world, region);
-        if (target != null) target.set(block.getType().name(), null);
+        if (target != null) target.set(blockKey, null);
         saveConfig();
         loadData();
         String scope = region == null
                 ? message("scope-world", "<world>", block.getWorld().getName())
                 : message("scope-region", "<region>", region);
-        send(player, "unlink-success", "<block>", block.getType().name(), "<scope>", scope);
+        send(player, "unlink-success", "<block>", blockKey, "<scope>", scope);
     }
 
     private String primaryRegion(Block block) {
@@ -799,10 +857,12 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     private static final class OpenInventory {
         private final Block block;
         private final String chestKey;
+        private final boolean animateChest;
 
-        private OpenInventory(Block block, String chestKey) {
+        private OpenInventory(Block block, String chestKey, boolean animateChest) {
             this.block = block;
             this.chestKey = chestKey;
+            this.animateChest = animateChest;
         }
     }
 }

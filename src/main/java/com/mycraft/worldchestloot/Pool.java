@@ -25,11 +25,13 @@ final class Pool {
         this.legacyLoot = legacyLoot == null ? null : new ArrayList<>(legacyLoot);
     }
 
-    List<ItemStack> roll(Player player, Random random) {
+    List<ItemStack> roll(Player player, Random random, boolean allowCollectionDuplicates) {
         List<ItemStack> result = new ArrayList<>();
         if (legacyLoot != null) {
             for (LootNode node : legacyLoot) {
-                if (random.nextDouble() * 100.0 < node.probability()) node.generate(player, random, result);
+                if (random.nextDouble() * 100.0 < node.probability()) {
+                    node.generate(player, random, result, allowCollectionDuplicates);
+                }
             }
             return result;
         }

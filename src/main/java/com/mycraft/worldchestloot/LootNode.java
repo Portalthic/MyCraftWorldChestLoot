@@ -11,7 +11,7 @@ import java.util.Random;
 interface LootNode {
     double probability();
 
-    void generate(Player player, Random random, List<ItemStack> result);
+    void generate(Player player, Random random, List<ItemStack> result, boolean allowCollectionDuplicates);
 
     void collectRewards(List<Reward> rewards);
 }
@@ -31,7 +31,7 @@ final class ItemLootNode implements LootNode {
     }
 
     @Override
-    public void generate(Player player, Random random, List<ItemStack> result) {
+    public void generate(Player player, Random random, List<ItemStack> result, boolean allowCollectionDuplicates) {
         ItemStack item = reward.build(player);
         if (item == null || item.getType() == Material.AIR) return;
         int amount = reward.getAmount() + (bonusAmount == 0 ? 0 : random.nextInt(bonusAmount + 1));
@@ -64,10 +64,12 @@ final class CollectionLootNode implements LootNode {
     }
 
     @Override
-    public void generate(Player player, Random random, List<ItemStack> result) {
+    public void generate(Player player, Random random, List<ItemStack> result, boolean allowCollectionDuplicates) {
         if (upper <= 0) {
             for (LootNode child : children) {
-                if (random.nextDouble() * 100.0 < child.probability()) child.generate(player, random, result);
+                if (random.nextDouble() * 100.0 < child.probability()) {
+                    child.generate(player, random, result, allowCollectionDuplicates);
+                }
             }
             return;
         }
@@ -89,8 +91,8 @@ final class CollectionLootNode implements LootNode {
                     break;
                 }
             }
-            selected.generate(player, random, result);
-            candidates.remove(selected);
+            selected.generate(player, random, result, allowCollectionDuplicates);
+            if (!allowCollectionDuplicates) candidates.remove(selected);
         }
     }
 
