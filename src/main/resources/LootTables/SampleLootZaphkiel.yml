@@ -1,0 +1,29 @@
+SampleLootZaphkiel:
+  ==: PhatLoot
+  AutoLoot: false
+  BreakAndRespawn: false
+  Global: false
+  LootConditions: []
+  LootList:
+    - ==: LootCollection
+      LootList:
+        - ==: ZaphkielItem
+          ItemID: example_sword
+          Amount: 1
+          Probability: 70.0
+        - ==: ZaphkielItem
+          ItemID: example_rare_material
+          Amount: 2
+          BonusAmount: 3
+          Probability: 30.0
+      LowerNumberOfLoots: 1
+      Name: ZaphkielItems
+      Probability: 100.0
+      UpperNumberOfLoots: 1
+  Name: SampleLootZaphkiel
+  Reset:
+    Days: 0
+    Hours: 2
+    Minutes: 0
+    Seconds: 0
+  RoundDownTime: false

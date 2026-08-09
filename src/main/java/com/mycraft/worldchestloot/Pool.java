@@ -1,0 +1,57 @@
+package com.mycraft.worldchestloot;
+
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+final class Pool {
+    final String name;
+    final int cooldownSeconds;
+    final int rolls;
+    final boolean globalReset;
+    final List<Reward> rewards;
+    final List<LootNode> legacyLoot;
+
+    Pool(String name, int cooldownSeconds, int rolls, boolean globalReset, List<Reward> rewards) {
+        this(name, cooldownSeconds, rolls, globalReset, rewards, null);
+    }
+
+    Pool(String name, int cooldownSeconds, int rolls, boolean globalReset, List<Reward> rewards, List<LootNode> legacyLoot) {
+        this.name = name; this.cooldownSeconds = cooldownSeconds;
+        this.rolls = Math.max(1, rolls); this.globalReset = globalReset; this.rewards = rewards;
+        this.legacyLoot = legacyLoot == null ? null : new ArrayList<>(legacyLoot);
+    }
+
+    List<ItemStack> roll(Player player, Random random) {
+        List<ItemStack> result = new ArrayList<>();
+        if (legacyLoot != null) {
+            for (LootNode node : legacyLoot) {
+                if (random.nextDouble() * 100.0 < node.probability()) node.generate(player, random, result);
+            }
+            return result;
+        }
+        List<Reward> candidates = new ArrayList<>(rewards);
+        for (int i = 0; i < rolls && !candidates.isEmpty(); i++) {
+            double total = 0;
+            for (Reward reward : candidates) total += Math.max(0, reward.getChance());
+            if (total <= 0) break;
+            double selected = random.nextDouble() * total;
+            Reward chosen = candidates.get(candidates.size() - 1);
+            for (Reward reward : candidates) {
+                selected -= Math.max(0, reward.getChance());
+                if (selected <= 0) { chosen = reward; break; }
+            }
+            ItemStack item = chosen.build(player);
+            if (item != null && item.getType() != org.bukkit.Material.AIR) result.add(item);
+            candidates.remove(chosen);
+        }
+        return result;
+    }
+
+    List<Reward> getRewards() { return new ArrayList<>(rewards); }
+    int getCooldownSeconds() { return cooldownSeconds; }
+    boolean isGlobalReset() { return globalReset; }
+}
