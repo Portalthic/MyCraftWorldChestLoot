@@ -1,9 +1,8 @@
 name: MyCraftWorldChestLoot
 main: com.mycraft.worldchestloot.MyCraftWorldChestLoot
 version: ${version}
-author: MyCraft
+author: Portalism
 description: WorldGuard-aware random chest loot for Paper 1.12.2
-depend: []
 softdepend: [WorldGuard, WorldEdit, Zaphkiel]
 commands:
   mcwcl:

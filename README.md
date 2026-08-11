@@ -1,18 +1,17 @@
 # MyCraftWorldChestLoot
 
 适用于 Paper 1.12.2 的大世界随机宝箱插件。
-插件版本为 `1.0.6`。
+插件版本为 `1.0.7`。
 
 ## 依赖
 
-#### 硬依赖
-
-- WorldGuard 6.2.2
-- WorldEdit（与 WorldGuard 6.2.2 配套版本）
-
 #### 软依赖
 
+- WorldGuard 6.2.2（用于区域绑定）
+- WorldEdit（与 WorldGuard 6.2.2 配套，用于区域坐标解析）
 - Zaphkiel（用于通过物品 ID 动态构建自定义物品）
+
+没有安装 WorldGuard 或配套 WorldEdit 时，插件仍可正常启动，但不会解析 `regions` 区域绑定，只支持世界级绑定。Zaphkiel 未安装时，仅无法生成对应的 Zaphkiel 自定义物品。
 
 ## 构建
 
@@ -22,7 +21,7 @@
 .\gradlew.bat clean build
 ```
 
-成品位于 `build/libs/MyCraftWorldChestLoot-1.0.6.jar`。
+成品位于 `build/libs/MyCraftWorldChestLoot-1.0.7.jar`。
 
 ## 配置
 
@@ -90,7 +89,7 @@ Reset:
 - "yearly,5/20;19:0:0"
 ```
 
-上例表示每天早上7点、每周二和周四晚上7点、每月20日下午3点，以及每年5月20日晚上7点刷新。只有一个固定日程时可以直接写成单个字符串；多个日程使用列表。旧的 `weekly,2,4;19:0:0` 多日期写法已弃用，不再接受。
+上例表示每天早上7点、每周二和周四晚上7点、每月20日下午3点，以及每年5月20日晚上7点刷新。只有一个固定日程时可以直接写成单个字符串；多个日程使用列表。
 
 `monthly` 还支持 `-1` 至 `-31` 的倒数日期：`monthly,-1` 表示每月最后一天，`monthly,-3` 表示每月倒数第三天。例如1月为29日，闰年2月为27日。正数日期在当月不存在时会跳过该月；负数倒数位置超出当月天数时同样跳过。
 
@@ -142,6 +141,27 @@ links:
 ```
 
 区域匹配优先于世界默认绑定。`default` 可以省略；未匹配绑定且 `settings.default-pool` 为空时，插件不会接管该箱子。省略可选标题时，界面使用奖池原名。
+
+WorldGuard 和配套 WorldEdit 均为软依赖。缺少其中任一插件时，`regions` 节点不会生效，可以使用以下世界级写法：
+
+```yaml
+links:
+  world:
+    default:
+      CHEST: basic:基础宝箱
+      SKULL:plantegg: rare:茄子宝箱
+```
+
+也继续支持 PhatLoots 风格的世界直写形式：
+
+```yaml
+links:
+  world:
+    CHEST: basic:基础宝箱
+    SKULL:plantegg: rare:茄子宝箱
+```
+
+没有区域依赖时，管理员执行 `/mcwcl link <奖池>` 会自动写入对应世界的 `default` 节点。
 
 ### 模型头颅刷新点
 

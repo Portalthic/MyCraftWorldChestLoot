@@ -25,7 +25,8 @@ final class WorldGuardHook {
     private void initialize() {
         try {
             Plugin p = plugin.getServer().getPluginManager().getPlugin("WorldGuard");
-            if (p == null) return;
+            Plugin worldEdit = plugin.getServer().getPluginManager().getPlugin("WorldEdit");
+            if (p == null || !p.isEnabled() || worldEdit == null || !worldEdit.isEnabled()) return;
             worldGuard = p;
             getRegionManager = p.getClass().getMethod("getRegionManager", World.class);
             Class<?> regionManager = getRegionManager.getReturnType();

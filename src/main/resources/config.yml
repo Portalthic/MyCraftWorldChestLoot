@@ -36,7 +36,8 @@ settings:
 
 links: {}
 # 管理员看向箱子或模型头颅执行 /wcl link <奖池名> 时，插件会自动写入区域绑定。
-# 区域绑定结构如下，其中区域名来自 WorldGuard：
+# 安装 WorldGuard 6.2.2 和配套 WorldEdit 后可使用区域绑定，区域名来自 WorldGuard。
+# 缺少区域依赖时 regions 不生效，但 default 和世界直写绑定仍可使用。
 # links:
 #   <世界名>:
 #     regions:
