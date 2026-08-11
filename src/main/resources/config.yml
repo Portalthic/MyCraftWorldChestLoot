@@ -84,9 +84,10 @@ settings-loot-tables:
     Name: SampleLootZaphkiel
     RoundDownTime: false
     # 固定刷新可写单个字符串或列表。
-    # daily 表示每天；weekly,<1-7> 表示周几（1=周一，7=周日）；monthly,<1-31> 表示每月第几日。
-    # 以下表示每天 7:00、每周二 19:00、每月20日 15:00 刷新。
+    # daily 表示每天；weekly,<1-7> 表示周几（1=周一，7=周日）。
+    # monthly 支持 1 至 31 和负数倒数日期；yearly 使用 <月>/<日>。
     Reset:
     - "daily;7:0:0"
     - "weekly,2;19:0:0"
-    - "monthly,20;15:0:0"
+    - "monthly,-3;19:0:0"
+    - "yearly,5/20;19:0:0"

@@ -21,7 +21,7 @@ final class ResetSpec {
     private static final Pattern DURATION_PART = Pattern.compile("([0-9]+(?:\\.[0-9]+)?)([dhms])",
             Pattern.CASE_INSENSITIVE);
 
-    private enum Kind { DURATION, DAILY, WEEKLY, MONTHLY, COMPOSITE }
+    private enum Kind { DURATION, DAILY, WEEKLY, MONTHLY, YEARLY, COMPOSITE }
 
     private final Kind kind;
     private final long durationSeconds;
@@ -116,13 +116,26 @@ final class ResetSpec {
             return fixed(Kind.DAILY, time, 0);
         }
         if (type.length != 2) return null;
+        if (type[0].equals("yearly")) {
+            String[] date = type[1].trim().split("/", -1);
+            if (date.length != 2) return null;
+            try {
+                int month = Integer.parseInt(date[0]);
+                int day = Integer.parseInt(date[1]);
+                if (month < 1 || month > 12 || day < 1
+                        || day > YearMonth.of(2000, month).lengthOfMonth()) return null;
+                return fixed(Kind.YEARLY, time, month * 100 + day);
+            } catch (RuntimeException ex) {
+                return null;
+            }
+        }
         int value;
         try { value = Integer.parseInt(type[1].trim()); }
         catch (NumberFormatException ex) { return null; }
         if (type[0].equals("weekly") && value >= 1 && value <= 7) {
             return fixed(Kind.WEEKLY, time, value);
         }
-        if (type[0].equals("monthly") && value >= 1 && value <= 31) {
+        if (type[0].equals("monthly") && value != 0 && value >= -31 && value <= 31) {
             return fixed(Kind.MONTHLY, time, value);
         }
         return null;
@@ -197,8 +210,21 @@ final class ResetSpec {
             YearMonth month = YearMonth.from(current);
             for (int offset = 0; offset < 1200; offset++) {
                 YearMonth candidateMonth = month.plusMonths(offset);
-                if (calendarValue > candidateMonth.lengthOfMonth()) continue;
-                ZonedDateTime candidate = candidateMonth.atDay(calendarValue).atTime(time).atZone(zone);
+                int day = calendarValue > 0 ? calendarValue
+                        : candidateMonth.lengthOfMonth() + calendarValue + 1;
+                if (day < 1 || day > candidateMonth.lengthOfMonth()) continue;
+                ZonedDateTime candidate = candidateMonth.atDay(day).atTime(time).atZone(zone);
+                if (candidate.isAfter(current)) return candidate.toInstant().toEpochMilli();
+            }
+        }
+        if (kind == Kind.YEARLY) {
+            int monthValue = calendarValue / 100;
+            int dayValue = calendarValue % 100;
+            int currentYear = current.getYear();
+            for (int offset = 0; offset <= 400; offset++) {
+                YearMonth candidateMonth = YearMonth.of(currentYear + offset, monthValue);
+                if (dayValue > candidateMonth.lengthOfMonth()) continue;
+                ZonedDateTime candidate = candidateMonth.atDay(dayValue).atTime(time).atZone(zone);
                 if (candidate.isAfter(current)) return candidate.toInstant().toEpochMilli();
             }
         }
@@ -228,6 +254,9 @@ final class ResetSpec {
         if (kind == Kind.DAILY) return "daily;" + formatTime();
         if (kind == Kind.WEEKLY) return "weekly," + calendarValue + ";" + formatTime();
         if (kind == Kind.MONTHLY) return "monthly," + calendarValue + ";" + formatTime();
+        if (kind == Kind.YEARLY) {
+            return "yearly," + calendarValue / 100 + "/" + calendarValue % 100 + ";" + formatTime();
+        }
         if (durationSeconds < 0) return "-1s";
         if (durationSeconds == 0) return "0s";
         long remaining = durationSeconds;

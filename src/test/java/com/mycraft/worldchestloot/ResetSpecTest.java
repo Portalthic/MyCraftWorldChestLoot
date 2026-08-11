@@ -64,6 +64,29 @@ public class ResetSpecTest {
     }
 
     @Test
+    public void calculatesNegativeMonthlyReset() {
+        ResetSpec reset = ResetSpec.parse("monthly,-3;19:0:0");
+        assertEquals(timestamp(2027, 1, 29, 19, 0, 0),
+                reset.nextResetAt(timestamp(2027, 1, 1, 0, 0, 0), false));
+        assertEquals(timestamp(2028, 2, 27, 19, 0, 0),
+                reset.nextResetAt(timestamp(2028, 2, 1, 0, 0, 0), false));
+    }
+
+    @Test
+    public void calculatesNextYearlyReset() {
+        ResetSpec reset = ResetSpec.parse("yearly,5/20;19:0:0");
+        assertEquals(timestamp(2026, 5, 20, 19, 0, 0),
+                reset.nextResetAt(timestamp(2026, 5, 1, 0, 0, 0), false));
+        assertEquals(timestamp(2027, 5, 20, 19, 0, 0),
+                reset.nextResetAt(timestamp(2026, 5, 21, 0, 0, 0), false));
+        assertEquals("yearly,5/20;19:0:0", reset.serialize());
+
+        ResetSpec leapDay = ResetSpec.parse("yearly,2/29;12:0:0");
+        assertEquals(timestamp(2028, 2, 29, 12, 0, 0),
+                leapDay.nextResetAt(timestamp(2027, 3, 1, 0, 0, 0), false));
+    }
+
+    @Test
     public void choosesOneTimestampWhenSchedulesOverlap() {
         ResetSpec reset = ResetSpec.parse(Arrays.asList("daily;7:0:0", "weekly,2;7:0:0"));
         long mondayAfterDaily = timestamp(2026, 8, 10, 8, 0, 0);
@@ -76,6 +99,8 @@ public class ResetSpecTest {
         assertNull(ResetSpec.parse("weekly,0,8;19:0:0"));
         assertNull(ResetSpec.parse("weekly,2,4;19:0:0"));
         assertNull(ResetSpec.parse("monthly,32;19:0:0"));
+        assertNull(ResetSpec.parse("monthly,0;19:0:0"));
+        assertNull(ResetSpec.parse("yearly,2/30;19:0:0"));
         assertNull(ResetSpec.parse("daily;25:0:0"));
         assertNull(ResetSpec.parse("2hours"));
     }
