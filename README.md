@@ -1,7 +1,7 @@
 # MyCraftWorldChestLoot
 
 适用于 Paper 1.12.2 的大世界随机宝箱插件。
-插件版本为 `1.0.7`。
+插件版本为 `1.1.0`。
 
 ## 依赖
 
@@ -10,8 +10,9 @@
 - WorldGuard 6.2.2（用于区域绑定）
 - WorldEdit（与 WorldGuard 6.2.2 配套，用于区域坐标解析）
 - Zaphkiel（用于通过物品 ID 动态构建自定义物品）
+- PlaceholderAPI（用于解析奖池开启条件中的玩家占位符）
 
-没有安装 WorldGuard 或配套 WorldEdit 时，插件仍可正常启动，但不会解析 `regions` 区域绑定，只支持世界级绑定。Zaphkiel 未安装时，仅无法生成对应的 Zaphkiel 自定义物品。
+没有安装 WorldGuard 或配套 WorldEdit 时，插件仍可正常启动，但不会解析 `regions` 区域绑定，只支持世界级绑定。Zaphkiel 未安装时，仅无法生成对应的 Zaphkiel 自定义物品。PlaceholderAPI 未安装时，不含占位符的常量条件仍可判断，包含 `%...%` 占位符的条件会判定为不满足。
 
 ## 构建
 
@@ -21,7 +22,7 @@
 .\gradlew.bat clean build
 ```
 
-成品位于 `build/libs/MyCraftWorldChestLoot-1.0.7.jar`。
+成品位于 `build/libs/MyCraftWorldChestLoot-1.1.0.jar`。
 
 ## 配置
 
@@ -49,15 +50,44 @@ plugins/MyCraftWorldChestLoot/
 
 `config.yml` 中的 `settings-loot-tables.<奖池名>` 可以集中覆盖奖池的 `Global`、`Name` 和 `Reset`。这里的设置优先于 `LootTables/<奖池名>.yml` 中的旧写法；未配置的字段继续读取奖池文件，双方都没有配置时使用 `settings` 下的默认值。GUI 标题优先级为 `links` 映射标题、`Name`、奖池文件名。
 
-`RoundDownTime` 也会按上述优先级读取，并用于将相对冷却起点对齐到整分钟、整小时或整天。`LootConditions` 目前保留为兼容字段，尚未启用条件触发模式。
+`RoundDownTime` 也会按上述优先级读取，并用于将相对冷却起点对齐到整分钟、整小时或整天。`LootConditions` 同样按上述优先级读取。
 
 ```yaml
 settings-loot-tables:
   SampleLoot:
     Global: false
+    LootConditions: []
     Name: SampleLoot
     Reset: "2h"
 ```
+
+### 奖池开启条件
+
+`LootConditions` 使用 PlaceholderAPI 占位符进行判断。列表从上到下按 AND 关系依次检查；第一条不满足后立即停止，不打开宝箱、不写入冷却，也不执行开箱命令：
+
+```yaml
+LootConditions:
+- "%player_level% >= 100"
+- "%player_health% >= 20"
+```
+
+支持数字运算符 `>=`、`<=`、`>`、`<`、`==`、`!=`，字符串支持 `==` 和 `!=`，字符串比较不区分大小写。行内可以使用 `&&`、`||` 和括号，优先级为比较、`&&`、`||`：
+
+```yaml
+LootConditions:
+- "(%player_level% >= 100 && %player_health% >= 20) || %player_name% == server"
+```
+
+比较带空格的字符串时需要使用单引号或双引号。每条条件可在末尾使用 `--message` 设置失败文本；没有配置时发送 `message.yml` 中的 `condition-not-met`：
+
+```yaml
+LootConditions:
+- "%player_level% >= 100 --message &c等级未满100级"
+- "%player_health% >= 20 --message &c生命未满20点"
+- "%player_name% == server --message &c你的名称不为server"
+```
+
+非法表达式、无法解析的占位符以及对字符串使用大小关系运算符都会按条件不满足处理。自定义失败文本支持 `&` 颜色代码。
 
 `Reset` 支持相对时长：
 

@@ -74,6 +74,9 @@ settings-loot-tables:
   # 支持占位符：<player>、<uuid>、<pool>、<world>、<x>、<y>、<z>。
   SampleLoot:
     Global: false
+    # 条件从上到下依次判断，任意一条失败后停止；列表中的多条条件为 AND 关系。
+    # 行内支持 >=、<=、>、<、==、!=、&&、|| 和括号，&& 的优先级高于 ||。
+    # 示例："%player_level% >= 100 --message 等级未满100级"
     LootConditions: []
     Name: SampleLoot
     RoundDownTime: false

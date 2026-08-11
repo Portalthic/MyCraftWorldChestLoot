@@ -50,6 +50,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     private final Random random = new Random();
     private Set<Material> chestMaterials = EnumSet.of(Material.CHEST, Material.TRAPPED_CHEST);
     private WorldGuardHook worldGuard;
+    private PlaceholderHook placeholders;
     private File cooldownFile;
     private File lootTablesDirectory;
     private MessageManager messages;
@@ -67,6 +68,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         messages = new MessageManager(this, new File(getDataFolder(), "message.yml"));
         cooldownFile = new File(getDataFolder(), "cooldowns.yml");
         worldGuard = new WorldGuardHook(this);
+        placeholders = new PlaceholderHook(this);
         loadData();
         getServer().getPluginManager().registerEvents(new ChestLootListener(this), this);
         getServer().getPluginManager().registerEvents(new PoolEditorListener(this), this);
@@ -170,6 +172,13 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         String poolName = link.poolName;
         Pool pool = pools.get(poolName);
         if (pool == null) return;
+        ConditionEvaluator.Result conditions = ConditionEvaluator.evaluate(pool.getLootConditions(),
+                placeholder -> placeholders.resolve(player, placeholder));
+        if (!conditions.isPassed()) {
+            if (conditions.getFailureMessage() == null) send(player, "condition-not-met");
+            else player.sendMessage(color(conditions.getFailureMessage()));
+            return;
+        }
         long remaining = cooldownRemaining(poolName, block, player);
         String cacheKey = inventoryCacheKey(pool, poolName, block, player);
         CachedInventory cached = inventoryCache.get(cacheKey);
@@ -481,7 +490,11 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         boolean roundDown = tableSettings != null && tableSettings.contains("RoundDownTime")
                 ? tableSettings.getBoolean("RoundDownTime")
                 : root.getBoolean("RoundDownTime", false);
-        pools.put(fileName, new Pool(fileName, displayName, reset, 1, global, roundDown, rewards, nodes));
+        Object conditionValue = tableSettings != null && tableSettings.contains("LootConditions")
+                ? tableSettings.get("LootConditions") : root.get("LootConditions");
+        List<String> lootConditions = stringList(conditionValue);
+        pools.put(fileName, new Pool(fileName, displayName, reset, 1, global, roundDown,
+                rewards, nodes, lootConditions));
         poolFiles.put(fileName, file);
         if (unsupported[0] > 0) {
             getLogger().info("Ignored " + unsupported[0] + " non-item reward(s) in " + file.getName()
@@ -573,6 +586,16 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     private double decimal(Object value, double fallback) {
         try { return Double.parseDouble(String.valueOf(value)); }
         catch (Exception ex) { return fallback; }
+    }
+
+    private List<String> stringList(Object value) {
+        List<String> result = new ArrayList<>();
+        if (value instanceof List) {
+            for (Object item : (List<?>) value) if (item != null) result.add(String.valueOf(item));
+        } else if (value != null) {
+            result.add(String.valueOf(value));
+        }
+        return result;
     }
 
     @Override

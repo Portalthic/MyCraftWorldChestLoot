@@ -17,19 +17,23 @@ final class Pool {
     final boolean roundDownTime;
     final List<Reward> rewards;
     final List<LootNode> legacyLoot;
+    final List<String> lootConditions;
 
     Pool(String name, int cooldownSeconds, int rolls, boolean globalReset, List<Reward> rewards) {
-        this(name, name, ResetSpec.duration(cooldownSeconds), rolls, globalReset, false, rewards, null);
+        this(name, name, ResetSpec.duration(cooldownSeconds), rolls, globalReset, false,
+                rewards, null, null);
     }
 
     Pool(String name, String displayName, ResetSpec reset, int rolls, boolean globalReset,
-         boolean roundDownTime, List<Reward> rewards, List<LootNode> legacyLoot) {
+         boolean roundDownTime, List<Reward> rewards, List<LootNode> legacyLoot,
+         List<String> lootConditions) {
         this.name = name; this.displayName = displayName == null || displayName.isEmpty() ? name : displayName;
         this.reset = reset == null ? ResetSpec.duration(0) : reset;
         this.cooldownSeconds = this.reset.editorSeconds();
         this.rolls = Math.max(1, rolls); this.globalReset = globalReset;
         this.roundDownTime = roundDownTime; this.rewards = rewards;
         this.legacyLoot = legacyLoot == null ? null : new ArrayList<>(legacyLoot);
+        this.lootConditions = lootConditions == null ? new ArrayList<>() : new ArrayList<>(lootConditions);
     }
 
     List<ItemStack> roll(Player player, Random random, boolean allowCollectionDuplicates) {
@@ -66,4 +70,5 @@ final class Pool {
     boolean isRoundDownTime() { return roundDownTime; }
     ResetSpec getReset() { return reset; }
     String getDisplayName() { return displayName; }
+    List<String> getLootConditions() { return new ArrayList<>(lootConditions); }
 }
