@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.mycraft"
-version = "1.0.4"
+version = "1.0.5"
 
 repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
@@ -13,6 +13,8 @@ repositories {
 
 dependencies {
     compileOnly("com.destroystokyo.paper:paper-api:1.12.2-R0.1-SNAPSHOT")
+    testImplementation("com.destroystokyo.paper:paper-api:1.12.2-R0.1-SNAPSHOT")
+    testImplementation("junit:junit:4.13.2")
 }
 
 java {

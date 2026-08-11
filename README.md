@@ -1,7 +1,7 @@
 # MyCraftWorldChestLoot
 
 适用于 Paper 1.12.2 的大世界随机宝箱插件。
-插件版本为 `1.0.4`。
+插件版本为 `1.0.5`。
 
 ## 依赖
 
@@ -22,7 +22,7 @@
 .\gradlew.bat clean build
 ```
 
-成品位于 `build/libs/MyCraftWorldChestLoot-1.0.4.jar`。
+成品位于 `build/libs/MyCraftWorldChestLoot-1.0.5.jar`。
 
 ## 配置
 
@@ -38,7 +38,7 @@ plugins/MyCraftWorldChestLoot/
    └─ SampleLootZaphkiel.yml
 ```
 
-奖池仅从 `LootTables/*.yml` 加载。推荐奖池文件只保留 `LootList`，其中继续使用 PhatLoots 的 `LootCollection` 和 `Item` 序列化结构；旧版包含 `AutoLoot`、`Global`、`Reset` 等字段的完整 PhatLoots 文件仍可读取。`SampleLootZaphkiel.yml` 额外展示本插件的 `ZaphkielItem` 格式。
+奖池仅从 `LootTables/*.yml` 加载。推荐奖池文件只保留 `LootList`，其中继续使用 PhatLoots 的 `LootCollection` 和 `Item` 序列化结构；旧版完整 PhatLoots 文件仍可读取。`SampleLootZaphkiel.yml` 额外展示本插件的 `ZaphkielItem` 格式。
 
 `settings.ShuffleLoot` 控制奖励是否随机散布。每个抽中的奖励条目占用独立槽位，即使多个条目生成了完全相同的物品也不会在首次生成时自动合并。
 
@@ -48,21 +48,52 @@ plugins/MyCraftWorldChestLoot/
 
 ### 奖池设置
 
-`config.yml` 中的 `settings-loot-tables.<奖池名>` 可以集中覆盖奖池的 `Global`、`Name` 和 `Reset`。这里的设置优先于 `LootTables/<奖池名>.yml` 中的旧写法；未配置的字段继续读取奖池文件，双方都没有配置时使用 `settings` 下的默认值。
+`config.yml` 中的 `settings-loot-tables.<奖池名>` 可以集中覆盖奖池的 `Global`、`Name` 和 `Reset`。这里的设置优先于 `LootTables/<奖池名>.yml` 中的旧写法；未配置的字段继续读取奖池文件，双方都没有配置时使用 `settings` 下的默认值。GUI 标题优先级为 `links` 映射标题、`Name`、奖池文件名。
 
-`RoundDownTime` 也会按上述优先级读取，并用于将冷却起点对齐到整分钟、整小时或整天。`AutoLoot`、`BreakAndRespawn` 和 `LootConditions` 会作为旧 PhatLoots 字段保留和兼容读取，但本插件的玩法固定为虚拟箱子，不启用自动拾取、破坏重生和条件触发模式。
+`RoundDownTime` 也会按上述优先级读取，并用于将相对冷却起点对齐到整分钟、整小时或整天。`LootConditions` 目前保留为兼容字段，尚未启用条件触发模式。
 
 ```yaml
 settings-loot-tables:
   SampleLoot:
     Global: false
     Name: SampleLoot
-    Reset:
-      Days: 0
-      Hours: 2
-      Minutes: 0
-      Seconds: 0
+    Reset: "2h"
 ```
+
+`Reset` 支持相对时长：
+
+```yaml
+Reset: "0d+2h+0m+0s"
+Reset: "2h"
+Reset: "2.5h"
+Reset: "2h+30m"
+Reset: "2h+1800s"
+```
+
+`0d+2h+0m+0s` 与 `2h` 都表示两小时；`2.5h`、`2h+30m`、`2h+1800s` 都表示两个半小时。单位分别为 `d` 天、`h` 小时、`m` 分钟、`s` 秒。
+
+固定时间刷新使用服务器系统时区。`daily` 表示每天在指定时间刷新：
+
+```yaml
+# 每天早上 7:00:00 刷新
+Reset: "daily;7:0:0"
+```
+
+`weekly,<周几>` 表示每周指定日期刷新，`1=周一`、`7=周日`；`monthly,<日期>` 表示每月指定日期刷新：
+
+```yaml
+Reset:
+- "daily;7:0:0"
+- "weekly,2;19:0:0"
+- "weekly,4;19:0:0"
+- "monthly,20;15:0:0"
+```
+
+上例表示每天早上7点、每周二和周四晚上7点、每月20日下午3点刷新。只有一个固定日程时可以直接写成单个字符串；多个日程使用列表。旧的 `weekly,2,4;19:0:0` 多日期写法已弃用，不再接受。
+
+当多个日程落在同一时刻时，插件只保存一个最近刷新时间，因此该时刻只刷新一次。对于 `monthly,29` 至 `monthly,31`，没有该日期的月份会被跳过。
+
+旧版 `Days/Hours/Minutes/Seconds` 四字段结构仍可读取，但 GUI 保存后会转换为新的字符串格式。
 
 ### 开关箱命令
 

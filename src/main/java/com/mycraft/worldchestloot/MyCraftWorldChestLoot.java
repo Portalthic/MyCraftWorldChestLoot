@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Calendar;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -161,7 +160,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     long cooldownRemaining(String poolName, Block block, Player player) {
         block = canonicalChest(block);
         Pool pool = pools.get(poolName);
-        if (pool == null || pool.cooldownSeconds <= 0) return 0;
+        if (pool == null || pool.reset.isDisabled()) return 0;
         Long until = cooldowns.get(cooldownKey(poolName, block, player));
         return until == null ? 0 : Math.max(0, (until - System.currentTimeMillis()) / 1000);
     }
@@ -199,9 +198,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
                 boolean allowDuplicates = getConfig().getBoolean(
                         "settings.AllowDuplicateItemsFromCollections", true);
                 addLoot(inventory, pool.roll(player, random, allowDuplicates), player);
-                long cooldownStart = pool.roundDownTime ? roundDownCooldownStart(now, pool.cooldownSeconds) : now;
-                long until = pool.cooldownSeconds < 0 ? Long.MAX_VALUE
-                        : cooldownStart + pool.cooldownSeconds * 1000L;
+                long until = pool.reset.nextResetAt(now, pool.roundDownTime);
                 cooldowns.put(cooldownKey(poolName, block, player), until);
             }
             cached = new CachedInventory(inventory, 0);
@@ -233,21 +230,6 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             inventory.setItem(emptySlots.get(nextSlot++), item.clone());
         }
         if (overflow) send(player, "inventory-overflow");
-    }
-
-    private long roundDownCooldownStart(long now, int cooldownSeconds) {
-        if (cooldownSeconds <= 0) return now;
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTimeInMillis(now);
-        if (cooldownSeconds % 60 == 0) {
-            calendar.set(Calendar.SECOND, 0);
-            calendar.set(Calendar.MILLISECOND, 0);
-            if (cooldownSeconds % 3600 == 0) {
-                calendar.set(Calendar.MINUTE, 0);
-                if (cooldownSeconds % 86400 == 0) calendar.set(Calendar.HOUR_OF_DAY, 0);
-            }
-        }
-        return calendar.getTimeInMillis();
     }
 
     private boolean openVirtualChest(Player player, Block block, String poolName, Inventory inventory) {
@@ -484,11 +466,13 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         List<Reward> rewards = new ArrayList<>();
         for (LootNode node : nodes) node.collectRewards(rewards);
         ConfigurationSection tableSettings = lootTableSettings(fileName);
-        ConfigurationSection reset = tableSettings == null ? null : tableSettings.getConfigurationSection("Reset");
-        if (reset == null) reset = root.getConfigurationSection("Reset");
-        int cooldown = reset == null ? getConfig().getInt("settings.default-cooldown-seconds", 3600)
-                : reset.getInt("Days") * 86400 + reset.getInt("Hours") * 3600
-                + reset.getInt("Minutes") * 60 + reset.getInt("Seconds");
+        boolean configuredReset = tableSettings != null && tableSettings.contains("Reset");
+        Object resetValue = configuredReset ? tableSettings.get("Reset") : root.get("Reset");
+        ResetSpec reset = resetValue == null ? null : ResetSpec.parse(resetValue);
+        if (resetValue != null && reset == null) {
+            getLogger().warning("Invalid Reset value for " + fileName + ": " + resetValue);
+        }
+        if (reset == null) reset = ResetSpec.duration(getConfig().getInt("settings.default-cooldown-seconds", 3600));
         boolean global = tableSettings != null && tableSettings.contains("Global")
                 ? tableSettings.getBoolean("Global")
                 : root.getBoolean("Global", getConfig().getBoolean("settings.default-global-reset", false));
@@ -497,7 +481,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         boolean roundDown = tableSettings != null && tableSettings.contains("RoundDownTime")
                 ? tableSettings.getBoolean("RoundDownTime")
                 : root.getBoolean("RoundDownTime", false);
-        pools.put(fileName, new Pool(fileName, displayName, cooldown, 1, global, roundDown, rewards, nodes));
+        pools.put(fileName, new Pool(fileName, displayName, reset, 1, global, roundDown, rewards, nodes));
         poolFiles.put(fileName, file);
         if (unsupported[0] > 0) {
             getLogger().info("Ignored " + unsupported[0] + " non-item reward(s) in " + file.getName()
@@ -789,7 +773,10 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         root.put("LootList", rewards);
         yaml.set(name, root);
         Pool current = pools.get(name);
-        savePoolSettings(name, cooldownSeconds, globalReset, current != null && current.isRoundDownTime());
+        ResetSpec reset = current != null && current.getReset().isFixed()
+                && current.getCooldownSeconds() == cooldownSeconds
+                ? current.getReset() : ResetSpec.duration(cooldownSeconds);
+        savePoolSettings(name, reset, globalReset, current != null && current.isRoundDownTime());
         savePool(name, yaml);
         loadData();
     }
@@ -805,28 +792,20 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("LootList", new ArrayList<Map<String, Object>>());
         yaml.set(name, root);
-        savePoolSettings(name, cooldown, global, false);
+        savePoolSettings(name, ResetSpec.duration(cooldown), global, false);
         savePool(name, yaml);
         loadData();
         send(player, "pool-created", "<pool>", name);
     }
 
-    private void savePoolSettings(String name, int cooldownSeconds, boolean globalReset, boolean roundDownTime) {
+    private void savePoolSettings(String name, ResetSpec reset, boolean globalReset, boolean roundDownTime) {
         ConfigurationSection root = getConfig().getConfigurationSection("settings-loot-tables");
         if (root == null) root = getConfig().createSection("settings-loot-tables");
         ConfigurationSection settings = directSection(root, name);
         if (settings == null) settings = root.createSection(name);
         settings.set("Global", globalReset);
         if (!settings.contains("Name")) settings.set("Name", name);
-        Map<String, Object> reset = new LinkedHashMap<>();
-        int remaining = Math.max(0, cooldownSeconds);
-        reset.put("Days", remaining / 86400);
-        remaining %= 86400;
-        reset.put("Hours", remaining / 3600);
-        remaining %= 3600;
-        reset.put("Minutes", remaining / 60);
-        reset.put("Seconds", remaining % 60);
-        settings.set("Reset", reset);
+        settings.set("Reset", reset.serialize());
         settings.set("RoundDownTime", roundDownTime);
         saveConfig();
     }

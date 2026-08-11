@@ -72,27 +72,21 @@ settings-loot-tables:
   # open-player-command、close-player-command。未填写时使用 settings 下的默认命令。
   # 支持占位符：<player>、<uuid>、<pool>、<world>、<x>、<y>、<z>。
   SampleLoot:
-    # Global、Name、Reset、RoundDownTime 会被插件读取；其余字段仅为 PhatLoots 兼容说明。
-    AutoLoot: false
-    BreakAndRespawn: false
     Global: false
     LootConditions: []
     Name: SampleLoot
-    Reset:
-      Hours: 2
-      Days: 0
-      Seconds: 0
-      Minutes: 0
     RoundDownTime: false
+    # 相对刷新支持 2h、2.5h、2h+30m、0d+2h+0m+0s 等写法。
+    Reset: "2h"
   SampleLootZaphkiel:
-    AutoLoot: false
-    BreakAndRespawn: false
     Global: false
     LootConditions: []
     Name: SampleLootZaphkiel
-    Reset:
-      Hours: 2
-      Days: 0
-      Seconds: 0
-      Minutes: 0
     RoundDownTime: false
+    # 固定刷新可写单个字符串或列表。
+    # daily 表示每天；weekly,<1-7> 表示周几（1=周一，7=周日）；monthly,<1-31> 表示每月第几日。
+    # 以下表示每天 7:00、每周二 19:00、每月20日 15:00 刷新。
+    Reset:
+    - "daily;7:0:0"
+    - "weekly,2;19:0:0"
+    - "monthly,20;15:0:0"
