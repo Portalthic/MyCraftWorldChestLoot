@@ -1,7 +1,7 @@
 # MyCraftWorldChestLoot
 
 适用于 Paper 1.12.2 的大世界随机宝箱插件。
-插件版本为 `1.0.3`。
+插件版本为 `1.0.4`。
 
 ## 依赖
 
@@ -22,7 +22,7 @@
 .\gradlew.bat clean build
 ```
 
-成品位于 `build/libs/MyCraftWorldChestLoot-1.0.3.jar`。
+成品位于 `build/libs/MyCraftWorldChestLoot-1.0.4.jar`。
 
 ## 配置
 
@@ -38,13 +38,45 @@ plugins/MyCraftWorldChestLoot/
    └─ SampleLootZaphkiel.yml
 ```
 
-奖池仅从 `LootTables/*.yml` 加载，文件使用 PhatLoots 的 `PhatLoot`、`LootCollection` 和 `Item` 序列化结构。`SampleLootZaphkiel.yml` 额外展示本插件的 `ZaphkielItem` 格式。
+奖池仅从 `LootTables/*.yml` 加载。推荐奖池文件只保留 `LootList`，其中继续使用 PhatLoots 的 `LootCollection` 和 `Item` 序列化结构；旧版包含 `AutoLoot`、`Global`、`Reset` 等字段的完整 PhatLoots 文件仍可读取。`SampleLootZaphkiel.yml` 额外展示本插件的 `ZaphkielItem` 格式。
 
 `settings.ShuffleLoot` 控制奖励是否随机散布。每个抽中的奖励条目占用独立槽位，即使多个条目生成了完全相同的物品也不会在首次生成时自动合并。
 
 `settings.AllowDuplicateItemsFromCollections` 控制集合在一次抽取多个奖励时是否允许重复命中同一个奖励条目。设置为 `false` 时采用不放回抽取；设置为 `true` 时采用放回抽取，与 PhatLoots 原配置行为一致。
 
 `settings.ForgetInventoryTime` 控制虚拟箱子内容在 JVM 内存中的保留秒数。缓存过期但冷却尚未结束时，玩家会看到同尺寸的空箱子。
+
+### 奖池设置
+
+`config.yml` 中的 `settings-loot-tables.<奖池名>` 可以集中覆盖奖池的 `Global`、`Name` 和 `Reset`。这里的设置优先于 `LootTables/<奖池名>.yml` 中的旧写法；未配置的字段继续读取奖池文件，双方都没有配置时使用 `settings` 下的默认值。
+
+`RoundDownTime` 也会按上述优先级读取，并用于将冷却起点对齐到整分钟、整小时或整天。`AutoLoot`、`BreakAndRespawn` 和 `LootConditions` 会作为旧 PhatLoots 字段保留和兼容读取，但本插件的玩法固定为虚拟箱子，不启用自动拾取、破坏重生和条件触发模式。
+
+```yaml
+settings-loot-tables:
+  SampleLoot:
+    Global: false
+    Name: SampleLoot
+    Reset:
+      Days: 0
+      Hours: 2
+      Minutes: 0
+      Seconds: 0
+```
+
+### 开关箱命令
+
+`settings` 下可以设置四种全局默认命令：
+
+```yaml
+settings:
+  default-open-console-command: "say <player> 打开了 <pool>"
+  default-close-console-command: ""
+  default-open-player-command: ""
+  default-close-player-command: ""
+```
+
+在 `settings-loot-tables.<奖池名>` 下使用 `open-console-command`、`close-console-command`、`open-player-command`、`close-player-command` 可以覆盖对应默认命令。字段既可以是单条字符串，也可以是 YAML 字符串列表。支持 `<player>`、`<uuid>`、`<pool>`、`<world>`、`<x>`、`<y>`、`<z>` 占位符。开箱命令在每次成功打开受管界面时执行，关箱命令在该界面关闭时执行。
 
 普通箱子和单个陷阱箱使用 27 格界面；普通大箱子和陷阱大箱子使用 54 格界面。双箱左右两部分共用同一个区域绑定、奖励缓存和冷却记录。
 

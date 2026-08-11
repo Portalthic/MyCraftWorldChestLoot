@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.mycraft"
-version = "1.0.3"
+version = "1.0.4"
 
 repositories {
     maven("https://repo.papermc.io/repository/maven-public/")

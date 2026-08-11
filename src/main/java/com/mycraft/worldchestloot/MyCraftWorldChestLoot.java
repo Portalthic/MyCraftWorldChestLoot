@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Calendar;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -185,7 +186,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         }
 
         int size = chestInventorySize(block);
-        String displayName = link.title == null ? poolName.replace('_', ' ') : link.title;
+        String displayName = link.title == null ? pool.getDisplayName().replace('_', ' ') : link.title;
         String title = color(getConfig().getString("settings.ChestName",
                 getConfig().getString("settings.default-gui-title", "&6<name>"))).replace("<name>", displayName);
         if (title.length() > 32) title = title.substring(0, 32);
@@ -198,7 +199,9 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
                 boolean allowDuplicates = getConfig().getBoolean(
                         "settings.AllowDuplicateItemsFromCollections", true);
                 addLoot(inventory, pool.roll(player, random, allowDuplicates), player);
-                long until = pool.cooldownSeconds < 0 ? Long.MAX_VALUE : now + pool.cooldownSeconds * 1000L;
+                long cooldownStart = pool.roundDownTime ? roundDownCooldownStart(now, pool.cooldownSeconds) : now;
+                long until = pool.cooldownSeconds < 0 ? Long.MAX_VALUE
+                        : cooldownStart + pool.cooldownSeconds * 1000L;
                 cooldowns.put(cooldownKey(poolName, block, player), until);
             }
             cached = new CachedInventory(inventory, 0);
@@ -206,7 +209,9 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         }
         if (remaining > 0) send(player, "cooldown-remaining", "<time>", formatDuration(remaining));
         cached.expiresAt = now + Math.max(0, getConfig().getLong("settings.ForgetInventoryTime", 60)) * 1000L;
-        openVirtualChest(player, block, inventory);
+        if (openVirtualChest(player, block, poolName, inventory)) {
+            runLootCommands(player, block, poolName, true);
+        }
     }
 
     private void addLoot(Inventory inventory, List<ItemStack> items, Player player) {
@@ -230,33 +235,101 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         if (overflow) send(player, "inventory-overflow");
     }
 
-    private void openVirtualChest(Player player, Block block, Inventory inventory) {
+    private long roundDownCooldownStart(long now, int cooldownSeconds) {
+        if (cooldownSeconds <= 0) return now;
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(now);
+        if (cooldownSeconds % 60 == 0) {
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            if (cooldownSeconds % 3600 == 0) {
+                calendar.set(Calendar.MINUTE, 0);
+                if (cooldownSeconds % 86400 == 0) calendar.set(Calendar.HOUR_OF_DAY, 0);
+            }
+        }
+        return calendar.getTimeInMillis();
+    }
+
+    private boolean openVirtualChest(Player player, Block block, String poolName, Inventory inventory) {
         String chestKey = chestLocationKey(block);
-        if (player.openInventory(inventory) == null) return;
+        if (player.openInventory(inventory) == null) return false;
         boolean animateChest = block.getState() instanceof Chest;
-        openInventories.put(player.getUniqueId(), new OpenInventory(block, chestKey, animateChest));
+        openInventories.put(player.getUniqueId(), new OpenInventory(block, chestKey, poolName, animateChest));
         player.playSound(block.getLocation(), Sound.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.75F, 0.95F);
-        if (!animateChest) return;
-        int viewers = chestViewers.containsKey(chestKey) ? chestViewers.get(chestKey) : 0;
-        chestViewers.put(chestKey, viewers + 1);
-        if (viewers == 0) playChestAnimation(block, true);
+        if (animateChest) {
+            int viewers = chestViewers.containsKey(chestKey) ? chestViewers.get(chestKey) : 0;
+            chestViewers.put(chestKey, viewers + 1);
+            if (viewers == 0) playChestAnimation(block, true);
+        }
+        return true;
     }
 
     void closeVirtualChest(Player player) {
         OpenInventory opened = openInventories.remove(player.getUniqueId());
         if (opened == null) return;
         player.playSound(opened.block.getLocation(), Sound.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.75F, 0.95F);
-        if (!opened.animateChest) return;
-        int viewers = chestViewers.containsKey(opened.chestKey) ? chestViewers.get(opened.chestKey) - 1 : 0;
-        if (viewers <= 0) {
-            chestViewers.remove(opened.chestKey);
-            Block closingBlock = opened.block;
-            String closingKey = opened.chestKey;
-            getServer().getScheduler().runTaskLater(this, () -> {
-                if (!chestViewers.containsKey(closingKey)) playChestAnimation(closingBlock, false);
-            }, 1L);
-        } else {
-            chestViewers.put(opened.chestKey, viewers);
+        if (opened.animateChest) {
+            int viewers = chestViewers.containsKey(opened.chestKey) ? chestViewers.get(opened.chestKey) - 1 : 0;
+            if (viewers <= 0) {
+                chestViewers.remove(opened.chestKey);
+                Block closingBlock = opened.block;
+                String closingKey = opened.chestKey;
+                getServer().getScheduler().runTaskLater(this, () -> {
+                    if (!chestViewers.containsKey(closingKey)) playChestAnimation(closingBlock, false);
+                }, 1L);
+            } else {
+                chestViewers.put(opened.chestKey, viewers);
+            }
+        }
+        runLootCommands(player, opened.block, opened.poolName, false);
+    }
+
+    private void runLootCommands(Player player, Block block, String poolName, boolean opening) {
+        String phase = opening ? "open" : "close";
+        String consoleKey = phase + "-console-command";
+        String playerKey = phase + "-player-command";
+        String defaultConsoleKey = "settings.default-" + consoleKey;
+        String defaultPlayerKey = "settings.default-" + playerKey;
+        for (String command : commandList(poolName, consoleKey, defaultConsoleKey)) {
+            dispatchConfiguredCommand(command, player, block, poolName, false);
+        }
+        for (String command : commandList(poolName, playerKey, defaultPlayerKey)) {
+            dispatchConfiguredCommand(command, player, block, poolName, true);
+        }
+    }
+
+    private List<String> commandList(String poolName, String poolKey, String defaultPath) {
+        ConfigurationSection settings = lootTableSettings(poolName);
+        Object value = settings != null && settings.contains(poolKey)
+                ? settings.get(poolKey) : getConfig().get(defaultPath);
+        List<String> commands = new ArrayList<>();
+        if (value instanceof List) {
+            for (Object item : (List<?>) value) if (item != null) commands.add(String.valueOf(item));
+        } else if (value != null) {
+            commands.add(String.valueOf(value));
+        }
+        return commands;
+    }
+
+    private void dispatchConfiguredCommand(String configured, Player player, Block block, String poolName,
+                                           boolean asPlayer) {
+        String command = configured == null ? "" : configured.trim();
+        if (command.isEmpty()) return;
+        if (command.startsWith("/")) command = command.substring(1).trim();
+        command = command.replace("<player>", player.getName())
+                .replace("<uuid>", player.getUniqueId().toString())
+                .replace("<pool>", poolName)
+                .replace("<world>", block.getWorld().getName())
+                .replace("<x>", String.valueOf(block.getX()))
+                .replace("<y>", String.valueOf(block.getY()))
+                .replace("<z>", String.valueOf(block.getZ()));
+        if (command.isEmpty()) return;
+        try {
+            if (asPlayer) player.performCommand(command);
+            else getServer().dispatchCommand(getServer().getConsoleSender(), command);
+        } catch (RuntimeException ex) {
+            getLogger().warning("Could not dispatch " + (asPlayer ? "player" : "console")
+                    + " loot command for " + poolName + ": " + ex.getMessage());
         }
     }
 
@@ -364,7 +437,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         Arrays.sort(files, (left, right) -> left.getName().compareToIgnoreCase(right.getName()));
         for (File file : files) {
             if (loadPhatLootFile(file)) continue;
-            getLogger().warning("Skipped non-PhatLoots loot table: " + file.getName());
+            getLogger().warning("Skipped invalid loot table: " + file.getName());
         }
     }
 
@@ -376,8 +449,6 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             getLogger().warning("Could not read loot table " + file.getName() + ": " + ex.getMessage());
             return true;
         }
-        if (!raw.contains("==: PhatLoot")) return false;
-
         // The upstream sample was saved by a newer Bukkit version; map renamed materials back to 1.12 names.
         raw = raw.replace("type: WOODEN_", "type: WOOD_")
                 .replace("type: GOLDEN_", "type: GOLD_");
@@ -399,8 +470,8 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         String rootName = yaml.isConfigurationSection(fileName) ? fileName
                 : yaml.getKeys(false).isEmpty() ? null : yaml.getKeys(false).iterator().next();
         ConfigurationSection root = rootName == null ? null : yaml.getConfigurationSection(rootName);
-        if (root == null || !"PhatLoot".equals(root.getString("mcwcl-legacy-type"))) {
-            getLogger().warning("Skipped invalid PhatLoots table: " + file.getName());
+        if (root == null || !root.isList("LootList")) {
+            getLogger().warning("Skipped invalid loot table: " + file.getName());
             return true;
         }
 
@@ -412,11 +483,21 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         }
         List<Reward> rewards = new ArrayList<>();
         for (LootNode node : nodes) node.collectRewards(rewards);
-        ConfigurationSection reset = root.getConfigurationSection("Reset");
+        ConfigurationSection tableSettings = lootTableSettings(fileName);
+        ConfigurationSection reset = tableSettings == null ? null : tableSettings.getConfigurationSection("Reset");
+        if (reset == null) reset = root.getConfigurationSection("Reset");
         int cooldown = reset == null ? getConfig().getInt("settings.default-cooldown-seconds", 3600)
                 : reset.getInt("Days") * 86400 + reset.getInt("Hours") * 3600
                 + reset.getInt("Minutes") * 60 + reset.getInt("Seconds");
-        pools.put(fileName, new Pool(fileName, cooldown, 1, root.getBoolean("Global"), rewards, nodes));
+        boolean global = tableSettings != null && tableSettings.contains("Global")
+                ? tableSettings.getBoolean("Global")
+                : root.getBoolean("Global", getConfig().getBoolean("settings.default-global-reset", false));
+        String displayName = tableSettings != null && tableSettings.contains("Name")
+                ? tableSettings.getString("Name") : root.getString("Name", fileName);
+        boolean roundDown = tableSettings != null && tableSettings.contains("RoundDownTime")
+                ? tableSettings.getBoolean("RoundDownTime")
+                : root.getBoolean("RoundDownTime", false);
+        pools.put(fileName, new Pool(fileName, displayName, cooldown, 1, global, roundDown, rewards, nodes));
         poolFiles.put(fileName, file);
         if (unsupported[0] > 0) {
             getLogger().info("Ignored " + unsupported[0] + " non-item reward(s) in " + file.getName()
@@ -686,7 +767,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     void saveEditedPool(String name, List<PoolEditorEntry> entries, int cooldownSeconds, boolean globalReset) {
         if (!pools.containsKey(name)) return;
         YamlConfiguration yaml = new YamlConfiguration();
-        Map<String, Object> root = phatLootRoot(name, cooldownSeconds, globalReset);
+        Map<String, Object> root = new LinkedHashMap<>();
         List<Map<String, Object>> rewards = new ArrayList<>();
         for (PoolEditorEntry entry : entries) {
             ItemStack item = entry.getItem();
@@ -707,6 +788,8 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         }
         root.put("LootList", rewards);
         yaml.set(name, root);
+        Pool current = pools.get(name);
+        savePoolSettings(name, cooldownSeconds, globalReset, current != null && current.isRoundDownTime());
         savePool(name, yaml);
         loadData();
     }
@@ -717,24 +800,24 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             return;
         }
         YamlConfiguration yaml = new YamlConfiguration();
-        Map<String, Object> root = phatLootRoot(name,
-                getConfig().getInt("settings.default-cooldown-seconds", 3600),
-                getConfig().getBoolean("settings.default-global-reset", false));
+        int cooldown = getConfig().getInt("settings.default-cooldown-seconds", 3600);
+        boolean global = getConfig().getBoolean("settings.default-global-reset", false);
+        Map<String, Object> root = new LinkedHashMap<>();
         root.put("LootList", new ArrayList<Map<String, Object>>());
         yaml.set(name, root);
+        savePoolSettings(name, cooldown, global, false);
         savePool(name, yaml);
         loadData();
         send(player, "pool-created", "<pool>", name);
     }
 
-    private Map<String, Object> phatLootRoot(String name, int cooldownSeconds, boolean globalReset) {
-        Map<String, Object> root = new LinkedHashMap<>();
-        root.put("==", "PhatLoot");
-        root.put("AutoLoot", false);
-        root.put("BreakAndRespawn", false);
-        root.put("Global", globalReset);
-        root.put("LootConditions", new ArrayList<Object>());
-        root.put("Name", name);
+    private void savePoolSettings(String name, int cooldownSeconds, boolean globalReset, boolean roundDownTime) {
+        ConfigurationSection root = getConfig().getConfigurationSection("settings-loot-tables");
+        if (root == null) root = getConfig().createSection("settings-loot-tables");
+        ConfigurationSection settings = directSection(root, name);
+        if (settings == null) settings = root.createSection(name);
+        settings.set("Global", globalReset);
+        if (!settings.contains("Name")) settings.set("Name", name);
         Map<String, Object> reset = new LinkedHashMap<>();
         int remaining = Math.max(0, cooldownSeconds);
         reset.put("Days", remaining / 86400);
@@ -743,9 +826,9 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         remaining %= 3600;
         reset.put("Minutes", remaining / 60);
         reset.put("Seconds", remaining % 60);
-        root.put("Reset", reset);
-        root.put("RoundDownTime", false);
-        return root;
+        settings.set("Reset", reset);
+        settings.set("RoundDownTime", roundDownTime);
+        saveConfig();
     }
 
     private void linkRegionBlock(Player player, String pool) {
@@ -820,6 +903,11 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         return directSection(scope, region);
     }
 
+    private ConfigurationSection lootTableSettings(String poolName) {
+        ConfigurationSection root = getConfig().getConfigurationSection("settings-loot-tables");
+        return root == null ? null : directSection(root, poolName);
+    }
+
     private ConfigurationSection directSection(ConfigurationSection parent, String key) {
         for (String child : parent.getKeys(false)) {
             if (child.equals(key)) return parent.getConfigurationSection(child);
@@ -857,11 +945,13 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     private static final class OpenInventory {
         private final Block block;
         private final String chestKey;
+        private final String poolName;
         private final boolean animateChest;
 
-        private OpenInventory(Block block, String chestKey, boolean animateChest) {
+        private OpenInventory(Block block, String chestKey, String poolName, boolean animateChest) {
             this.block = block;
             this.chestKey = chestKey;
+            this.poolName = poolName;
             this.animateChest = animateChest;
         }
     }

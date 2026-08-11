@@ -9,19 +9,24 @@ import java.util.Random;
 
 final class Pool {
     final String name;
+    final String displayName;
     final int cooldownSeconds;
     final int rolls;
     final boolean globalReset;
+    final boolean roundDownTime;
     final List<Reward> rewards;
     final List<LootNode> legacyLoot;
 
     Pool(String name, int cooldownSeconds, int rolls, boolean globalReset, List<Reward> rewards) {
-        this(name, cooldownSeconds, rolls, globalReset, rewards, null);
+        this(name, name, cooldownSeconds, rolls, globalReset, false, rewards, null);
     }
 
-    Pool(String name, int cooldownSeconds, int rolls, boolean globalReset, List<Reward> rewards, List<LootNode> legacyLoot) {
-        this.name = name; this.cooldownSeconds = cooldownSeconds;
-        this.rolls = Math.max(1, rolls); this.globalReset = globalReset; this.rewards = rewards;
+    Pool(String name, String displayName, int cooldownSeconds, int rolls, boolean globalReset,
+         boolean roundDownTime, List<Reward> rewards, List<LootNode> legacyLoot) {
+        this.name = name; this.displayName = displayName == null || displayName.isEmpty() ? name : displayName;
+        this.cooldownSeconds = cooldownSeconds;
+        this.rolls = Math.max(1, rolls); this.globalReset = globalReset;
+        this.roundDownTime = roundDownTime; this.rewards = rewards;
         this.legacyLoot = legacyLoot == null ? null : new ArrayList<>(legacyLoot);
     }
 
@@ -56,4 +61,6 @@ final class Pool {
     List<Reward> getRewards() { return new ArrayList<>(rewards); }
     int getCooldownSeconds() { return cooldownSeconds; }
     boolean isGlobalReset() { return globalReset; }
+    boolean isRoundDownTime() { return roundDownTime; }
+    String getDisplayName() { return displayName; }
 }

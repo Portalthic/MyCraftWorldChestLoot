@@ -1,9 +1,4 @@
 SampleLoot:
-  ==: PhatLoot
-  AutoLoot: false
-  BreakAndRespawn: false
-  Global: false
-  LootConditions: []
   LootList:
     - ==: LootCollection
       LootList:
@@ -1011,10 +1006,3 @@ SampleLoot:
       Lower: 0
       Probability: 100.0
       Upper: 0
-  Name: SampleLoot
-  Reset:
-    Hours: 0
-    Days: 0
-    Seconds: 0
-    Minutes: 0
-  RoundDownTime: false

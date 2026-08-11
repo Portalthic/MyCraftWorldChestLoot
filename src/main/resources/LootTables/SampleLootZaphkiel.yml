@@ -1,9 +1,4 @@
 SampleLootZaphkiel:
-  ==: PhatLoot
-  AutoLoot: false
-  BreakAndRespawn: false
-  Global: false
-  LootConditions: []
   LootList:
     - ==: LootCollection
       LootList:
@@ -20,10 +15,3 @@ SampleLootZaphkiel:
       Name: ZaphkielItems
       Probability: 100.0
       UpperNumberOfLoots: 1
-  Name: SampleLootZaphkiel
-  Reset:
-    Days: 0
-    Hours: 2
-    Minutes: 0
-    Seconds: 0
-  RoundDownTime: false

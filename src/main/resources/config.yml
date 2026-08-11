@@ -27,6 +27,12 @@ settings:
   ForgetInventoryTime: 60
   # 奖励箱界面标题，<name> 会被替换为奖池名或 links 中配置的映射标题。
   ChestName: "&8<name>"
+  # 开箱或关箱时执行的默认命令。留空表示不执行，命令开头的 / 可以省略。
+  # 字符串可改写为 YAML 列表以依次执行多条命令。
+  default-open-console-command: ""
+  default-close-console-command: ""
+  default-open-player-command: ""
+  default-close-player-command: ""
 
 links: {}
 # 管理员看向箱子或模型头颅执行 /wcl link <奖池名> 时，插件会自动写入区域绑定。
@@ -59,3 +65,34 @@ links: {}
 #     TRAPPED_CHEST: rare:稀有宝箱
 
 # 奖池从 LootTables/*.yml 加载，文件结构兼容 PhatLoots。
+
+settings-loot-tables:
+  # 此处配置优先于 LootTables/<奖池名>.yml 中的同名基础设置。
+  # 可选命令字段：open-console-command、close-console-command、
+  # open-player-command、close-player-command。未填写时使用 settings 下的默认命令。
+  # 支持占位符：<player>、<uuid>、<pool>、<world>、<x>、<y>、<z>。
+  SampleLoot:
+    # Global、Name、Reset、RoundDownTime 会被插件读取；其余字段仅为 PhatLoots 兼容说明。
+    AutoLoot: false
+    BreakAndRespawn: false
+    Global: false
+    LootConditions: []
+    Name: SampleLoot
+    Reset:
+      Hours: 2
+      Days: 0
+      Seconds: 0
+      Minutes: 0
+    RoundDownTime: false
+  SampleLootZaphkiel:
+    AutoLoot: false
+    BreakAndRespawn: false
+    Global: false
+    LootConditions: []
+    Name: SampleLootZaphkiel
+    Reset:
+      Hours: 2
+      Days: 0
+      Seconds: 0
+      Minutes: 0
+    RoundDownTime: false
