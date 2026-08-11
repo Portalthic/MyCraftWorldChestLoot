@@ -77,6 +77,13 @@ settings-loot-tables:
     # 条件从上到下依次判断，任意一条失败后停止；列表中的多条条件为 AND 关系。
     # 行内支持 >=、<=、>、<、==、!=、&&、|| 和括号，&& 的优先级高于 ||。
     # 示例："%player_level% >= 100 --message 等级未满100级"
+    # 原生变量无需调用 PlaceholderAPI：
+    # weather 为 sunny、raining 或 thundering，仅支持 == 和 !=。
+    # time 可与 0 至 23999 的世界游戏刻数值比较；time == day/night 仅支持 == 和 !=。
+    # 与 PhatLoots 一致，day 为 0-13000 及 23850-23999，night 为 13000-23850；边界 13000、23850 同时匹配两者。
+    # permission == mycraft.vip 表示拥有权限，!= 表示不拥有，仅支持 == 和 !=。
+    # level、experience、health、foodlevel、saturation 支持全部数值比较运算符。
+    # >= 也可以按兼容写法写成 =>。
     LootConditions: []
     Name: SampleLoot
     RoundDownTime: false

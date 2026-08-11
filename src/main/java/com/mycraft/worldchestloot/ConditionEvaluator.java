@@ -6,7 +6,14 @@ import java.util.List;
 
 final class ConditionEvaluator {
     interface PlaceholderResolver {
-        String resolve(String placeholder);
+        String resolve(String value);
+
+        default boolean resolvesBareValues() { return false; }
+
+        default Boolean compare(String leftSource, String leftValue, String operator,
+                                String rightSource, String rightValue) {
+            return null;
+        }
     }
 
     static final class Result {
@@ -25,12 +32,22 @@ final class ConditionEvaluator {
     private ConditionEvaluator() { }
 
     static Result evaluate(List<String> conditions, PlaceholderResolver resolver) {
+        return evaluate(conditions, resolver, true);
+    }
+
+    static Result evaluateSilently(List<String> conditions, PlaceholderResolver resolver) {
+        return evaluate(conditions, resolver, false);
+    }
+
+    private static Result evaluate(List<String> conditions, PlaceholderResolver resolver,
+                                   boolean allowCustomMessages) {
         if (conditions == null || conditions.isEmpty()) return new Result(true, null);
         for (String configured : conditions) {
             ParsedCondition condition = splitMessage(configured == null ? "" : configured);
             boolean passed;
             try {
-                passed = new Parser(tokenize(condition.expression), resolver).parse();
+                passed = (allowCustomMessages || condition.message == null)
+                        && new Parser(tokenize(condition.expression), resolver).parse();
             } catch (IllegalArgumentException ex) {
                 passed = false;
             }
@@ -130,7 +147,7 @@ final class ConditionEvaluator {
     }
 
     private static String operatorAt(String value, int index) {
-        String[] operators = {">=", "<=", "==", "!=", "&&", "||", ">", "<"};
+        String[] operators = {">=", "=>", "<=", "==", "!=", "&&", "||", ">", "<"};
         for (String operator : operators) {
             if (value.startsWith(operator, index)) return operator;
         }
@@ -202,30 +219,36 @@ final class ConditionEvaluator {
                 require(Type.RIGHT_PAREN);
                 return result;
             }
-            String left = operand(evaluate);
+            Operand left = operand(evaluate);
             if (position < tokens.size() && tokens.get(position).type == Type.OPERATOR
                     && isComparison(tokens.get(position).value)) {
                 String operator = tokens.get(position++).value;
-                String right = operand(evaluate);
-                return evaluate && compare(left, operator, right);
+                Operand right = operand(evaluate);
+                if (!evaluate) return false;
+                Boolean resolved = resolver == null ? null : resolver.compare(
+                        left.source, left.value, operator, right.source, right.value);
+                return resolved != null ? resolved : compare(left.value, operator, right.value);
             }
-            if ("true".equalsIgnoreCase(left)) return true;
-            if ("false".equalsIgnoreCase(left)) return false;
+            if ("true".equalsIgnoreCase(left.value)) return true;
+            if ("false".equalsIgnoreCase(left.value)) return false;
             throw new IllegalArgumentException("Expected comparison");
         }
 
-        private String operand(boolean evaluate) {
+        private Operand operand(boolean evaluate) {
             if (position >= tokens.size() || tokens.get(position).type != Type.VALUE) {
                 throw new IllegalArgumentException("Expected value");
             }
             Token token = tokens.get(position++);
-            if (!token.placeholder || !evaluate) return token.value;
-            if (resolver == null) throw new IllegalArgumentException("PlaceholderAPI is unavailable");
-            String resolved = resolver.resolve(token.value);
-            if (resolved == null || resolved.equals(token.value)) {
+            if (!evaluate) return new Operand(token.value, token.value);
+            String resolved = resolver == null || (!token.placeholder && !resolver.resolvesBareValues())
+                    ? null : resolver.resolve(token.value);
+            if (resolved != null && (!token.placeholder || !resolved.equals(token.value))) {
+                return new Operand(token.value, resolved);
+            }
+            if (token.placeholder) {
                 throw new IllegalArgumentException("Unresolved placeholder");
             }
-            return resolved;
+            return new Operand(token.value, token.value);
         }
 
         private boolean match(Type type) {
@@ -250,11 +273,12 @@ final class ConditionEvaluator {
         }
 
         private static boolean isComparison(String operator) {
-            return ">=".equals(operator) || "<=".equals(operator) || ">".equals(operator)
+            return ">=".equals(operator) || "=>".equals(operator) || "<=".equals(operator) || ">".equals(operator)
                     || "<".equals(operator) || "==".equals(operator) || "!=".equals(operator);
         }
 
         private static boolean compare(String left, String operator, String right) {
+            if ("=>".equals(operator)) operator = ">=";
             BigDecimal leftNumber = number(left);
             BigDecimal rightNumber = number(right);
             if (leftNumber != null && rightNumber != null) {
@@ -274,6 +298,16 @@ final class ConditionEvaluator {
         private static BigDecimal number(String value) {
             try { return new BigDecimal(value.trim()); }
             catch (NumberFormatException ex) { return null; }
+        }
+
+        private static final class Operand {
+            final String source;
+            final String value;
+
+            Operand(String source, String value) {
+                this.source = source;
+                this.value = value;
+            }
         }
     }
 }

@@ -36,12 +36,13 @@ final class Pool {
         this.lootConditions = lootConditions == null ? new ArrayList<>() : new ArrayList<>(lootConditions);
     }
 
-    List<ItemStack> roll(Player player, Random random, boolean allowCollectionDuplicates) {
+    List<ItemStack> roll(Player player, LootEvaluationContext context, Random random,
+                         boolean allowCollectionDuplicates) {
         List<ItemStack> result = new ArrayList<>();
         if (legacyLoot != null) {
             for (LootNode node : legacyLoot) {
-                if (random.nextDouble() * 100.0 < node.probability()) {
-                    node.generate(player, random, result, allowCollectionDuplicates);
+                if (node.isEligible(context) && random.nextDouble() * 100.0 < node.probability(context)) {
+                    node.generate(player, context, random, result, allowCollectionDuplicates);
                 }
             }
             return result;

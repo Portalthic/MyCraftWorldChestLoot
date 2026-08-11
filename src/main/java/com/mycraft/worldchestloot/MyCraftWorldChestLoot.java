@@ -172,8 +172,8 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
         String poolName = link.poolName;
         Pool pool = pools.get(poolName);
         if (pool == null) return;
-        ConditionEvaluator.Result conditions = ConditionEvaluator.evaluate(pool.getLootConditions(),
-                placeholder -> placeholders.resolve(player, placeholder));
+        LootEvaluationContext evaluation = new LootEvaluationContext(player, placeholders);
+        ConditionEvaluator.Result conditions = ConditionEvaluator.evaluate(pool.getLootConditions(), evaluation);
         if (!conditions.isPassed()) {
             if (conditions.getFailureMessage() == null) send(player, "condition-not-met");
             else player.sendMessage(color(conditions.getFailureMessage()));
@@ -206,7 +206,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             if (remaining <= 0) {
                 boolean allowDuplicates = getConfig().getBoolean(
                         "settings.AllowDuplicateItemsFromCollections", true);
-                addLoot(inventory, pool.roll(player, random, allowDuplicates), player);
+                addLoot(inventory, pool.roll(player, evaluation, random, allowDuplicates), player);
                 long until = pool.reset.nextResetAt(now, pool.roundDownTime);
                 cooldowns.put(cooldownKey(poolName, block, player), until);
             }
@@ -512,7 +512,7 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
     @SuppressWarnings("unchecked")
     private LootNode parseLegacyNode(Map<?, ?> entry, String poolName, int[] unsupported) {
         String type = String.valueOf(entry.get("mcwcl-legacy-type"));
-        double probability = decimal(entry.get("Probability"), 100);
+        LootProbability probability = LootProbability.parse(entry.get("Probability"), 100);
         if (type.equals("LootCollection")) {
             List<LootNode> children = new ArrayList<>();
             Object list = entry.get("LootList");
@@ -525,13 +525,14 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
             }
             return new CollectionLootNode(probability,
                     integer(entry.get("LowerNumberOfLoots"), 1),
-                    integer(entry.get("UpperNumberOfLoots"), 1), children);
+                    integer(entry.get("UpperNumberOfLoots"), 1), children,
+                    stringList(entry.get("LootConditions")));
         }
         if (type.equals("ZaphkielItem")) {
             String id = String.valueOf(entry.containsKey("ItemID") ? entry.get("ItemID") : entry.get("id"));
             int amount = integer(entry.get("Amount"), 1);
-            return new ItemLootNode(new Reward(Reward.Type.ZAPHKIEL, null, id, amount, probability),
-                    integer(entry.get("BonusAmount"), 0));
+            return new ItemLootNode(new Reward(Reward.Type.ZAPHKIEL, null, id, amount,
+                    probability.editorValue()), integer(entry.get("BonusAmount"), 0), probability);
         }
         if (type.equals("Item")) {
             Object serialized = entry.get("ItemStack");
@@ -541,8 +542,8 @@ public final class MyCraftWorldChestLoot extends JavaPlugin {
                 catch (Exception ignored) { }
             }
             if (item != null) {
-                return new ItemLootNode(new Reward(Reward.Type.ITEM, item, null, item.getAmount(), probability),
-                        integer(entry.get("BonusAmount"), 0));
+                return new ItemLootNode(new Reward(Reward.Type.ITEM, item, null, item.getAmount(),
+                        probability.editorValue()), integer(entry.get("BonusAmount"), 0), probability);
             }
             getLogger().warning("Skipped invalid ItemStack in pool " + poolName + ".");
         }

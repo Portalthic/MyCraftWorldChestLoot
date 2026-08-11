@@ -1,10 +1,15 @@
 SampleLootZaphkiel:
   LootList:
     - ==: LootCollection
+      # 集合条件不满足时，该集合不会参与抽取，并且不会向玩家发送消息。
+      # LootCollection 内不支持 --message。
+      # Global 为 true 时，缓存内容由刷新后第一个生成该宝箱奖励的玩家决定。
+      LootConditions: []
       LootList:
         - ==: ZaphkielItem
           ItemID: example_sword
           Amount: 1
+          # Probability 也可以填写返回数值的 PAPI 占位符，例如 "%player_food_level%"。
           Probability: 70.0
         - ==: ZaphkielItem
           ItemID: example_rare_material

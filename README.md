@@ -1,7 +1,7 @@
 # MyCraftWorldChestLoot
 
 适用于 Paper 1.12.2 的大世界随机宝箱插件。
-插件版本为 `1.1.0`。
+插件版本为 `1.1.1`。
 
 ## 依赖
 
@@ -22,7 +22,7 @@
 .\gradlew.bat clean build
 ```
 
-成品位于 `build/libs/MyCraftWorldChestLoot-1.1.0.jar`。
+成品位于 `build/libs/MyCraftWorldChestLoot-1.1.1.jar`。
 
 ## 配置
 
@@ -88,6 +88,55 @@ LootConditions:
 ```
 
 非法表达式、无法解析的占位符以及对字符串使用大小关系运算符都会按条件不满足处理。自定义失败文本支持 `&` 颜色代码。
+
+除 PAPI 占位符外，还支持以下不调用 PlaceholderAPI 的原生变量：
+
+```yaml
+LootConditions:
+- "weather == sunny"
+- "time >= 1800"
+- "time == day"
+- "permission == mycraft.vip"
+- "level => 100"
+- "experience => 10000"
+- "health => 20"
+- "foodlevel => 10"
+- "saturation => 10"
+```
+
+`weather` 的取值为 `sunny`、`raining`、`thundering`，仅支持 `==`、`!=`。`permission == <权限>` 表示玩家拥有该权限，`permission != <权限>` 表示玩家不拥有该权限，也仅支持 `==`、`!=`。
+
+`time` 是玩家所在世界的 `0-23999` 游戏刻，可使用所有数值运算符。与 PhatLoots 原行为一致，`time == day` 匹配 `0-13000` 及 `23850-23999`，`time == night` 匹配 `13000-23850`；边界 `13000` 和 `23850` 同时属于两者。`day`、`night` 写法只支持 `==`、`!=`。
+
+`level` 是当前等级，`experience` 是根据当前等级和经验条进度计算的可用总经验值，`health` 是当前生命值，`foodlevel` 是饥饿值，`saturation` 是饱和度。这些数值变量支持全部比较运算符。为兼容配置习惯，`=>` 与 `>=` 含义相同。
+
+### 集合条件与动态概率
+
+`LootCollection` 可以单独配置 `LootConditions`。条件不满足时，该集合会在概率计算前从候选列表中排除，其余集合重新按自身权重参与抽取。集合条件静默执行，不向玩家发送消息，也不支持 `--message`：
+
+```yaml
+- ==: LootCollection
+  LootConditions:
+  - "level >= 100"
+  - "%player_health% >= 20"
+  LootList:
+  - ==: Item
+    # ItemStack 配置省略
+    Probability: 100.0
+  LowerNumberOfLoots: 1
+  UpperNumberOfLoots: 1
+  Probability: 20.0
+```
+
+`Item`、`ZaphkielItem` 和 `LootCollection` 的 `Probability` 均可填写返回数值的 PAPI 占位符：
+
+```yaml
+Probability: "%player_food_level%"
+```
+
+占位符结果会作为当前玩家本次开箱时的概率或权重。结果无法解析为数值、PlaceholderAPI 未安装或占位符未解析时，该条目的概率按 `0` 处理。负数同样按 `0` 处理；在独立百分比抽取中，大于 `100` 的结果等同于必定命中，在集合权重抽取中则作为普通权重参与比例计算。
+
+同一次奖励生成中，相同集合条件和动态概率只计算一次，相同条件占位符也会缓存，以减少 PlaceholderAPI 调用。若奖池使用 `Global: true`，宝箱缓存内容由刷新后第一个生成奖励的玩家状态决定，之后打开该缓存的玩家看到相同内容。
 
 `Reset` 支持相对时长：
 

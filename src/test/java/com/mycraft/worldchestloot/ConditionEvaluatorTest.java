@@ -16,6 +16,7 @@ public class ConditionEvaluatorTest {
     public void comparesNumbersAndText() {
         assertPassed("%level% >= 100", token -> "100");
         assertPassed("%health% < 20.5", token -> "20");
+        assertPassed("%level% => 100", token -> "100");
         assertPassed("%name% == server", token -> "Server");
         assertPassed("%name% != other", token -> "server");
     }
